@@ -1,0 +1,6 @@
+{
+  "name": "The Golf Wardrobe",
+  "description": "Luxury golf headcovers & AI-powered shopping assistant combining premium craftsmanship and personality.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
