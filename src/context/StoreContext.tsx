@@ -153,7 +153,16 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const [adminTab, setAdminTab] = useState<string>('dashboard');
 
   // Core Data States
-  const [products, setProducts] = useState<Product[]>(() => getStored('products', INITIAL_PRODUCTS));
+  const [products, setProducts] = useState<Product[]>(() => {
+    const saved = getStored<Product[]>('products', INITIAL_PRODUCTS);
+    if (!Array.isArray(saved) || saved.length === 0) return INITIAL_PRODUCTS;
+    const isOldSample = saved.some(p => p.name.includes('Florentine Saddle Leather') || p.name.includes('Emerald Shamrock Blade'));
+    if (isOldSample) {
+      setStored('products', INITIAL_PRODUCTS);
+      return INITIAL_PRODUCTS;
+    }
+    return saved;
+  });
   const [categories, setCategories] = useState<CategoryInfo[]>(() => getStored('categories', INITIAL_CATEGORIES));
   const [cart, setCart] = useState<CartItem[]>(() => getStored('cart', []));
   const [wishlist, setWishlist] = useState<string[]>(() => getStored('wishlist', ['prod-1', 'prod-3']));
@@ -191,9 +200,11 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         }
 
         if (loadedProducts && isMounted) {
-          setProducts(loadedProducts);
+          const isOldSample = loadedProducts.some(p => p.name.includes('Florentine Saddle Leather') || p.name.includes('Emerald Shamrock Blade'));
+          const finalProducts = isOldSample ? INITIAL_PRODUCTS : loadedProducts;
+          setProducts(finalProducts);
           // Keep local storage & IndexedDB updated with latest server state
-          setStored('products', loadedProducts);
+          setStored('products', finalProducts);
         }
 
         const savedCategories = await idbGet<CategoryInfo[]>('categories');
