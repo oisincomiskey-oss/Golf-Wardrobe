@@ -8,9 +8,10 @@ import { PackingSlipModal } from '../components/PackingSlipModal';
 import { ShippingNotificationModal } from '../components/ShippingNotificationModal';
 import { exportOrdersToCSV, DEFAULT_SHIPPING_SETTINGS } from '../utils/shipping';
 import { compressImageFile, compressDataUrl } from '../utils/imageCompressor';
+import { isStudioEnvironment, isAdminUnlocked, unlockAdminWithPin, exportStoreDataBackup } from '../utils/envHelper';
 import { 
   ShieldAlert, Package, ShoppingBag, Plus, Edit, Trash2, 
-  Eye, EyeOff, Save, Check, RefreshCw, BarChart3, Settings, Crown, 
+  Eye, EyeOff, Save, Check, RefreshCw, BarChart3, Settings, Crown, Lock,
   Tag, Sparkles, CreditCard, DollarSign, Layers, CheckCircle2, Image as ImageIcon, Wand2, FileText, Download, AlertCircle, Camera,
   Palette, Type as FontIcon, Truck, Printer, Mail, Globe, Search, FileSpreadsheet, Filter, Clock, MapPin, User, ExternalLink, ShieldCheck
 } from 'lucide-react';
@@ -114,6 +115,23 @@ export const AdminPage: React.FC = () => {
     updateCustomStudioSettings,
     triggerToast
   } = useStore();
+
+  const isStudio = isStudioEnvironment();
+  const [isUnlocked, setIsUnlocked] = useState<boolean>(() => isAdminUnlocked());
+  const [inputPin, setInputPin] = useState('');
+  const [pinError, setPinError] = useState(false);
+
+  const handleUnlockAdmin = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (unlockAdminWithPin(inputPin)) {
+      setIsUnlocked(true);
+      setPinError(false);
+      triggerToast('Admin Portal Unlocked', 'success');
+    } else {
+      setPinError(true);
+      triggerToast('Incorrect Master PIN. Default is 4242', 'error');
+    }
+  };
 
   const handleDirectFileUpload = async (
     e: React.ChangeEvent<HTMLInputElement>,
@@ -378,9 +396,72 @@ export const AdminPage: React.FC = () => {
 
   const totalRevenue = orders.reduce((sum, o) => sum + o.total, 0);
 
+  if (!isUnlocked) {
+    return (
+      <div className="min-h-[70vh] flex items-center justify-center px-4 py-16 bg-[#FAF8F5]">
+        <div className="max-w-md w-full bg-white p-8 rounded-3xl border border-[#E5DEC9] shadow-xl text-center space-y-6">
+          <div className="w-16 h-16 bg-[#0D382C] text-[#C9A24D] rounded-full flex items-center justify-center mx-auto shadow-md">
+            <Lock className="w-8 h-8" />
+          </div>
+
+          <div>
+            <h2 className="font-serif text-2xl font-bold text-[#1A1A1A]">Admin Access Restricted</h2>
+            <p className="text-xs text-gray-500 mt-2 leading-relaxed">
+              Enter your Master Admin PIN to view store inventory, orders, shipping rates, and PayPal configuration.
+            </p>
+          </div>
+
+          <form onSubmit={handleUnlockAdmin} className="space-y-4">
+            <div>
+              <input
+                type="password"
+                maxLength={8}
+                placeholder="Enter PIN (Default: 4242)"
+                value={inputPin}
+                onChange={(e) => {
+                  setInputPin(e.target.value);
+                  setPinError(false);
+                }}
+                className={`w-full text-center tracking-[0.4em] font-mono text-base py-3 rounded-2xl border ${
+                  pinError ? 'border-red-500 bg-red-50 text-red-900' : 'border-[#E5DEC9] bg-[#FAF8F5]'
+                } focus:outline-none focus:border-[#C9A24D]`}
+              />
+              {pinError && <p className="text-[11px] text-red-600 font-bold mt-1.5">Incorrect PIN code. Default is 4242</p>}
+            </div>
+
+            <button
+              type="submit"
+              className="w-full bg-[#C9A24D] hover:bg-[#b38e3c] text-white py-3.5 rounded-2xl text-xs font-bold uppercase tracking-wider transition-all shadow-md flex items-center justify-center gap-2 cursor-pointer"
+            >
+              <ShieldCheck className="w-4 h-4" /> Unlock Admin Portal
+            </button>
+          </form>
+
+          <p className="text-[10px] text-gray-400 italic">
+            Note: On Vercel deployments, the Admin button is automatically hidden from public visitors.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 lg:py-16 space-y-8">
       
+      {/* Studio Environment Exclusive Notification Banner */}
+      {isStudio && (
+        <div className="bg-[#0D382C] text-white px-6 py-3 rounded-2xl flex flex-wrap items-center justify-between gap-3 text-xs shadow-sm border border-[#C9A24D]/30">
+          <div className="flex items-center gap-2.5">
+            <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse shrink-0" />
+            <span className="font-bold text-[#C9A24D]">AI Studio Developer Mode:</span>
+            <span className="text-gray-200">Admin tab is strictly visible to you in Studio. On Vercel & hosted deployments, the Admin button is automatically hidden from public customers.</span>
+          </div>
+          <span className="bg-white/10 text-white text-[10px] font-bold px-2.5 py-1 rounded-lg font-mono shrink-0">
+            Vercel Ready
+          </span>
+        </div>
+      )}
+
       {/* Photo Library Picker Modal */}
       <ImagePickerModal
         isOpen={isPickerOpen}
@@ -1840,6 +1921,27 @@ export const AdminPage: React.FC = () => {
                 placeholder="e.g. A21AAFIx... or live client id"
                 className="w-full bg-[#FAF8F5] border border-[#E5DEC9] rounded-xl px-3.5 py-2.5 font-mono text-[11px] focus:outline-none focus:border-[#C9A24D]"
               />
+            </div>
+
+            {/* Vercel & Production Readiness Callout */}
+            <div className="p-5 bg-[#0D382C] text-white rounded-2xl border border-[#C9A24D]/40 space-y-3 mt-4">
+              <div className="flex items-center gap-2">
+                <CheckCircle2 className="w-5 h-5 text-[#C9A24D]" />
+                <h4 className="font-bold text-sm">Vercel & Production Hosting Readiness</h4>
+              </div>
+              <p className="text-[11px] text-gray-200 leading-relaxed">
+                Your PayPal settings, product inventory ({products.length} items), custom studio pricing, and shipping rules are saved and fully compatible with Vercel hosting.
+              </p>
+              <button
+                type="button"
+                onClick={() => {
+                  exportStoreDataBackup({ products, orders, homepageConfig, salePromoConfig, storeSettings, customStudioSettings });
+                  triggerToast('Downloaded Vercel store backup JSON!', 'success');
+                }}
+                className="bg-[#C9A24D] hover:bg-[#b38e3c] text-white px-4 py-2.5 rounded-xl text-[11px] font-bold flex items-center gap-1.5 transition-colors cursor-pointer shadow-xs"
+              >
+                <Download className="w-3.5 h-3.5" /> Download Complete Vercel Data Backup (.json)
+              </button>
             </div>
           </div>
 

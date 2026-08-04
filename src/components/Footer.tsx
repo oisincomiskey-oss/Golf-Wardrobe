@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useStore } from '../context/StoreContext';
+import { isStudioEnvironment, isAdminUnlocked } from '../utils/envHelper';
 import { Crown, Mail, ArrowRight, ShieldCheck, Truck, RefreshCw, Lock } from 'lucide-react';
 
 export const Footer: React.FC = () => {
@@ -136,11 +137,13 @@ export const Footer: React.FC = () => {
                   Shipping & Returns
                 </button>
               </li>
-              <li>
-                <button onClick={() => navigateTo('admin')} className="hover:text-white transition-colors">
-                  Admin Portal
-                </button>
-              </li>
+              {(isStudioEnvironment() || isAdminUnlocked()) && (
+                <li>
+                  <button onClick={() => navigateTo('admin')} className="hover:text-white transition-colors flex items-center gap-1">
+                    <ShieldCheck className="w-3.5 h-3.5 text-[#C9A24D]" /> Admin Portal
+                  </button>
+                </li>
+              )}
             </ul>
           </div>
 

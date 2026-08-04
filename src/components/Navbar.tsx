@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useStore } from '../context/StoreContext';
 import { ProductCategory } from '../types';
+import { isStudioEnvironment, isAdminUnlocked } from '../utils/envHelper';
 import { 
   Search, Heart, ShoppingBag, User, Sparkles, ChevronDown, 
   Menu, X, Crown, ShieldAlert, Wand2
@@ -163,16 +164,19 @@ export const Navbar: React.FC = () => {
               About
             </button>
 
-            <button
-              onClick={() => navigateTo('admin')}
-              className={`hover:text-[#C9A24D] transition-colors pb-1 flex items-center gap-1 ${
-                currentView === 'admin' ? 'text-black border-b-2 border-black font-bold' : 'text-gray-400'
-              }`}
-              title="Admin Panel"
-            >
-              <ShieldAlert className="w-3.5 h-3.5 text-[#C9A24D]" />
-              <span>Admin</span>
-            </button>
+            {/* Show Admin button strictly when in AI Studio or if Admin is unlocked */}
+            {(isStudioEnvironment() || isAdminUnlocked()) && (
+              <button
+                onClick={() => navigateTo('admin')}
+                className={`hover:text-[#C9A24D] transition-colors pb-1 flex items-center gap-1 ${
+                  currentView === 'admin' ? 'text-black border-b-2 border-black font-bold' : 'text-gray-400'
+                }`}
+                title="Admin Portal (Studio Only)"
+              >
+                <ShieldAlert className="w-3.5 h-3.5 text-[#C9A24D]" />
+                <span>Admin</span>
+              </button>
+            )}
           </nav>
 
           {/* Right Action Icons */}
@@ -314,15 +318,17 @@ export const Navbar: React.FC = () => {
             My Account & Orders
           </button>
 
-          <button
-            onClick={() => {
-              setIsMobileMenuOpen(false);
-              navigateTo('admin');
-            }}
-            className="w-full text-left py-2 text-xs text-[#C9A24D] font-semibold flex items-center gap-2"
-          >
-            <ShieldAlert className="w-4 h-4" /> Admin Portal
-          </button>
+          {(isStudioEnvironment() || isAdminUnlocked()) && (
+            <button
+              onClick={() => {
+                setIsMobileMenuOpen(false);
+                navigateTo('admin');
+              }}
+              className="w-full text-left py-2 text-xs text-[#C9A24D] font-semibold flex items-center gap-2"
+            >
+              <ShieldAlert className="w-4 h-4" /> Admin Portal (Studio Only)
+            </button>
+          )}
         </div>
       )}
     </header>

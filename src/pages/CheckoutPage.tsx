@@ -481,6 +481,27 @@ export const CheckoutPage: React.FC = () => {
                 </div>
               )}
 
+              {/* PayPal Form Container */}
+              {paymentMethod === 'paypal' && (
+                <div className="p-4 bg-gradient-to-r from-blue-50/80 to-amber-50/50 rounded-2xl border border-blue-200 space-y-3 text-xs">
+                  <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 rounded-full bg-blue-600 text-white font-bold italic flex items-center justify-center text-sm shadow-xs shrink-0">
+                      P
+                    </div>
+                    <div>
+                      <p className="font-bold text-gray-900">PayPal Express Checkout</p>
+                      <p className="text-[11px] text-gray-600">Pay securely with your PayPal account or Pay in 3 installments</p>
+                    </div>
+                  </div>
+                  <div className="bg-white p-3 rounded-xl border border-blue-100 text-[11px] text-gray-600 space-y-1">
+                    <p className="font-semibold text-blue-900 flex items-center gap-1">
+                      <Check className="w-3.5 h-3.5 text-blue-600" /> Merchant Account: {storeSettings.paypalEmail || 'payments@thegolfwardrobe.com'}
+                    </p>
+                    <p className="text-[10px] text-gray-500">Includes PayPal Buyer Protection & instant digital order confirmation</p>
+                  </div>
+                </div>
+              )}
+
               <button
                 type="submit"
                 className="w-full bg-[#C9A24D] hover:bg-[#b38e3c] text-white py-4 rounded-2xl text-xs font-bold uppercase tracking-widest transition-all shadow-xl flex items-center justify-center gap-2"
