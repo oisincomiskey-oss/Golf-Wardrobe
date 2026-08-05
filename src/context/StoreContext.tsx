@@ -136,13 +136,15 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     idbSet(key, value);
     broadcastChange(key, value);
 
-    // Sync products to backend server API as additional redundancy
-    if (key === 'products' && Array.isArray(value)) {
-      fetch('/api/products', {
+    // Sync store updates to backend server API so all new visitors see updated products, prices, and customizations
+    const syncKeys = ['products', 'categories', 'storeSettings', 'customStudioSettings', 'homepage', 'salePromoConfig', 'aiSettings'];
+    if (syncKeys.includes(key)) {
+      const apiKey = key === 'homepage' ? 'homepageConfig' : key;
+      fetch('/api/store-data', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ products: value })
-      }).catch(() => {});
+        body: JSON.stringify({ [apiKey]: value })
+      }).catch((err) => console.warn('Failed to sync store data to server:', err));
     }
   };
 
@@ -166,42 +168,98 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const [storeSettings, setStoreSettings] = useState<StoreSettings>(() => getStored('storeSettings', INITIAL_STORE_SETTINGS));
   const [customStudioSettings, setCustomStudioSettings] = useState<CustomStudioSettings>(() => getStored('customStudioSettings', INITIAL_CUSTOM_STUDIO_SETTINGS));
 
-  // Asynchronous rehydration from IndexedDB and Backend API on initial mount
+  // Asynchronous rehydration from Backend API, IndexedDB, and LocalStorage on initial mount
   useEffect(() => {
     let isMounted = true;
     async function loadIndexedDB() {
       try {
-        let loadedProducts: Product[] | null = null;
-        
-        // 1. Check IndexedDB first for locally saved/updated products
-        const savedProducts = await idbGet<Product[]>('products');
-        if (savedProducts && Array.isArray(savedProducts) && savedProducts.length > 0) {
-          loadedProducts = savedProducts;
-        }
-
-        // 2. If IndexedDB is empty, fall back to server-side products store if available
-        if (!loadedProducts) {
-          try {
-            const apiRes = await fetch('/api/products');
-            if (apiRes.ok) {
-              const apiData = await apiRes.json();
-              if (apiData?.products && Array.isArray(apiData.products) && apiData.products.length > 0) {
-                loadedProducts = apiData.products;
-              }
+        let serverData: any = null;
+        try {
+          const apiRes = await fetch('/api/store-data');
+          if (apiRes.ok) {
+            const apiJson = await apiRes.json();
+            if (apiJson?.storeData) {
+              serverData = apiJson.storeData;
             }
-          } catch (e) {}
-        }
+          }
+        } catch (e) {}
 
-        if (loadedProducts && isMounted) {
+        // Products: Server store takes precedence if available, otherwise fallback to IndexedDB
+        const loadedProducts: Product[] | null = (serverData?.products && Array.isArray(serverData.products) && serverData.products.length > 0)
+          ? serverData.products
+          : await idbGet<Product[]>('products');
+
+        if (loadedProducts && Array.isArray(loadedProducts) && loadedProducts.length > 0 && isMounted) {
           setProducts(loadedProducts);
-          // Keep local storage & IndexedDB updated with latest state
-          setStored('products', loadedProducts);
+          try {
+            localStorage.setItem('golf_wardrobe_products', JSON.stringify(loadedProducts));
+          } catch (e) {}
+          idbSet('products', loadedProducts);
         }
 
-        const savedCategories = await idbGet<CategoryInfo[]>('categories');
-        if (savedCategories && Array.isArray(savedCategories) && savedCategories.length > 0 && isMounted) {
-          setCategories(savedCategories);
+        // Categories
+        const loadedCategories = (serverData?.categories && Array.isArray(serverData.categories) && serverData.categories.length > 0)
+          ? serverData.categories
+          : await idbGet<CategoryInfo[]>('categories');
+        if (loadedCategories && Array.isArray(loadedCategories) && loadedCategories.length > 0 && isMounted) {
+          setCategories(loadedCategories);
+          try {
+            localStorage.setItem('golf_wardrobe_categories', JSON.stringify(loadedCategories));
+          } catch (e) {}
+          idbSet('categories', loadedCategories);
         }
+
+        // Store Settings
+        const loadedStoreSettings = serverData?.storeSettings || await idbGet<StoreSettings>('storeSettings');
+        if (loadedStoreSettings && isMounted) {
+          setStoreSettings(loadedStoreSettings);
+          try {
+            localStorage.setItem('golf_wardrobe_storeSettings', JSON.stringify(loadedStoreSettings));
+          } catch (e) {}
+          idbSet('storeSettings', loadedStoreSettings);
+        }
+
+        // Custom Studio Settings
+        const loadedCustomStudioSettings = serverData?.customStudioSettings || await idbGet<CustomStudioSettings>('customStudioSettings');
+        if (loadedCustomStudioSettings && isMounted) {
+          setCustomStudioSettings(loadedCustomStudioSettings);
+          try {
+            localStorage.setItem('golf_wardrobe_customStudioSettings', JSON.stringify(loadedCustomStudioSettings));
+          } catch (e) {}
+          idbSet('customStudioSettings', loadedCustomStudioSettings);
+        }
+
+        // Homepage Config
+        const loadedHomepageConfig = serverData?.homepageConfig || await idbGet<HomepageConfig>('homepage');
+        if (loadedHomepageConfig && isMounted) {
+          setHomepageConfig(loadedHomepageConfig);
+          try {
+            localStorage.setItem('golf_wardrobe_homepage', JSON.stringify(loadedHomepageConfig));
+          } catch (e) {}
+          idbSet('homepage', loadedHomepageConfig);
+        }
+
+        // Sale Promo Config
+        const loadedSalePromoConfig = serverData?.salePromoConfig || await idbGet<SalePromoConfig>('salePromoConfig');
+        if (loadedSalePromoConfig && isMounted) {
+          setSalePromoConfig(loadedSalePromoConfig);
+          try {
+            localStorage.setItem('golf_wardrobe_salePromoConfig', JSON.stringify(loadedSalePromoConfig));
+          } catch (e) {}
+          idbSet('salePromoConfig', loadedSalePromoConfig);
+        }
+
+        // AI Settings
+        const loadedAiSettings = serverData?.aiSettings || await idbGet<AISettingsConfig>('aiSettings');
+        if (loadedAiSettings && isMounted) {
+          setAiSettings(loadedAiSettings);
+          try {
+            localStorage.setItem('golf_wardrobe_aiSettings', JSON.stringify(loadedAiSettings));
+          } catch (e) {}
+          idbSet('aiSettings', loadedAiSettings);
+        }
+
+        // Personal session data from IndexedDB
         const savedOrders = await idbGet<Order[]>('orders');
         if (savedOrders && Array.isArray(savedOrders) && isMounted) {
           setOrders(savedOrders);
@@ -210,21 +268,9 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         if (savedCustomOrders && Array.isArray(savedCustomOrders) && isMounted) {
           setCustomOrders(savedCustomOrders);
         }
-        const savedHp = await idbGet<HomepageConfig>('homepage');
-        if (savedHp && isMounted) {
-          setHomepageConfig(savedHp);
-        }
-        const savedPromo = await idbGet<SalePromoConfig>('salePromoConfig');
-        if (savedPromo && isMounted) {
-          setSalePromoConfig(savedPromo);
-        }
-        const savedSettings = await idbGet<StoreSettings>('storeSettings');
-        if (savedSettings && isMounted) {
-          setStoreSettings(savedSettings);
-        }
-        const savedCustomStudio = await idbGet<CustomStudioSettings>('customStudioSettings');
-        if (savedCustomStudio && isMounted) {
-          setCustomStudioSettings(savedCustomStudio);
+        const savedCustomers = await idbGet<CustomerUser[]>('customers');
+        if (savedCustomers && Array.isArray(savedCustomers) && isMounted) {
+          setCustomers(savedCustomers);
         }
       } catch (err) {
         console.error("Mount rehydration error:", err);

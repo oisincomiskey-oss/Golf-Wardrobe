@@ -34,8 +34,19 @@ app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', time: new Date().toISOString() });
 });
 
-// Products Persistence Server Store
+// Products & Store Data Persistence Server Store
 const PRODUCTS_FILE_PATH = path.join(process.cwd(), 'products.json');
+const STORE_DATA_FILE_PATH = path.join(process.cwd(), 'store_data.json');
+
+interface StoreData {
+  products?: any[];
+  categories?: any[];
+  storeSettings?: any;
+  customStudioSettings?: any;
+  homepageConfig?: any;
+  salePromoConfig?: any;
+  aiSettings?: any;
+}
 
 function loadProductsFromDisk(): any[] | null {
   try {
@@ -60,16 +71,83 @@ function saveProductsToDisk(products: any[]) {
   }
 }
 
-let serverProductsStore: any[] | null = loadProductsFromDisk();
+function loadStoreDataFromDisk(): StoreData {
+  let data: StoreData = {};
+  try {
+    if (fs.existsSync(STORE_DATA_FILE_PATH)) {
+      const content = fs.readFileSync(STORE_DATA_FILE_PATH, 'utf-8');
+      data = JSON.parse(content) || {};
+    }
+  } catch (e) {
+    console.error('Failed to read store_data.json:', e);
+  }
+
+  if (!data.products || !Array.isArray(data.products) || data.products.length === 0) {
+    const productsFromDisk = loadProductsFromDisk();
+    if (productsFromDisk && Array.isArray(productsFromDisk) && productsFromDisk.length > 0) {
+      data.products = productsFromDisk;
+    }
+  }
+
+  return data;
+}
+
+function saveStoreDataToDisk(data: StoreData) {
+  try {
+    fs.writeFileSync(STORE_DATA_FILE_PATH, JSON.stringify(data, null, 2), 'utf-8');
+    if (data.products && Array.isArray(data.products)) {
+      saveProductsToDisk(data.products);
+    }
+  } catch (e) {
+    console.error('Failed to save store_data.json:', e);
+  }
+}
+
+let serverStoreData: StoreData = loadStoreDataFromDisk();
+let serverProductsStore: any[] | null = serverStoreData.products || loadProductsFromDisk();
+
+app.get('/api/store-data', (req, res) => {
+  res.json({ success: true, storeData: serverStoreData });
+});
+
+app.post('/api/store-data', (req, res) => {
+  const updates = req.body || {};
+  if (updates.products && Array.isArray(updates.products)) {
+    serverStoreData.products = updates.products;
+    serverProductsStore = updates.products;
+  }
+  if (updates.categories && Array.isArray(updates.categories)) {
+    serverStoreData.categories = updates.categories;
+  }
+  if (updates.storeSettings) {
+    serverStoreData.storeSettings = updates.storeSettings;
+  }
+  if (updates.customStudioSettings) {
+    serverStoreData.customStudioSettings = updates.customStudioSettings;
+  }
+  if (updates.homepageConfig || updates.homepage) {
+    serverStoreData.homepageConfig = updates.homepageConfig || updates.homepage;
+  }
+  if (updates.salePromoConfig) {
+    serverStoreData.salePromoConfig = updates.salePromoConfig;
+  }
+  if (updates.aiSettings) {
+    serverStoreData.aiSettings = updates.aiSettings;
+  }
+
+  saveStoreDataToDisk(serverStoreData);
+  res.json({ success: true, storeData: serverStoreData });
+});
 
 app.get('/api/products', (req, res) => {
-  res.json({ products: serverProductsStore });
+  res.json({ products: serverStoreData.products || serverProductsStore });
 });
 
 app.post('/api/products', (req, res) => {
   if (Array.isArray(req.body?.products)) {
     serverProductsStore = req.body.products;
-    saveProductsToDisk(serverProductsStore);
+    serverStoreData.products = req.body.products;
+    saveStoreDataToDisk(serverStoreData);
   }
   res.json({ success: true, count: serverProductsStore ? serverProductsStore.length : 0 });
 });
