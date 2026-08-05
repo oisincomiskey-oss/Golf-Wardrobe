@@ -1,0 +1,25 @@
+[
+  {
+    "name": "Baguette blade putter headcover",
+    "category": "Funny",
+    "clubFit": "Blade Putter",
+    "allowedClubFits": [
+      "Blade Putter"
+    ],
+    "price": 29.99,
+    "originalPrice": 25,
+    "material": "Full-Grain Italian Saddle Leather",
+    "image": "https://images.unsplash.com/photo-1535131749006-b7f58c99034b?auto=format&fit=crop&q=80&w=1000",
+    "gallery": [
+      "https://images.unsplash.com/photo-1535131749006-b7f58c99034b?auto=format&fit=crop&q=80&w=1000"
+    ],
+    "isWaterproof": true,
+    "isGenuineLeather": true,
+    "stock": 10,
+    "featured": true,
+    "tags": ["funny", "putter"],
+    "rating": 5.0,
+    "reviewsCount": 12,
+    "reviews": []
+  }
+]

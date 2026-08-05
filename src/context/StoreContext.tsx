@@ -168,12 +168,14 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const [storeSettings, setStoreSettings] = useState<StoreSettings>(() => getStored('storeSettings', INITIAL_STORE_SETTINGS));
   const [customStudioSettings, setCustomStudioSettings] = useState<CustomStudioSettings>(() => getStored('customStudioSettings', INITIAL_CUSTOM_STUDIO_SETTINGS));
 
-  // Asynchronous rehydration from Backend API, IndexedDB, and LocalStorage on initial mount
+  // Asynchronous rehydration from Backend API, Static Files (/store_data.json, /products.json), IndexedDB, and LocalStorage
   useEffect(() => {
     let isMounted = true;
     async function loadIndexedDB() {
       try {
         let serverData: any = null;
+        
+        // 1. Try Backend API first
         try {
           const apiRes = await fetch('/api/store-data');
           if (apiRes.ok) {
@@ -184,9 +186,34 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
           }
         } catch (e) {}
 
-        // Products: Server store takes precedence if available, otherwise fallback to IndexedDB
+        // 2. If Backend API is unavailable (e.g. on Hostinger static hosting), fallback to static JSON files
+        if (!serverData) {
+          try {
+            const staticDataRes = await fetch('/store_data.json');
+            if (staticDataRes.ok) {
+              serverData = await staticDataRes.json();
+            }
+          } catch (e) {}
+        }
+
+        let staticProducts: Product[] | null = null;
+        if (!serverData?.products || !Array.isArray(serverData.products) || serverData.products.length === 0) {
+          try {
+            const staticProdRes = await fetch('/products.json');
+            if (staticProdRes.ok) {
+              const prodJson = await staticProdRes.json();
+              if (Array.isArray(prodJson) && prodJson.length > 0) {
+                staticProducts = prodJson;
+              }
+            }
+          } catch (e) {}
+        }
+
+        // Products: Server / Static store takes precedence if available, otherwise fallback to IndexedDB
         const loadedProducts: Product[] | null = (serverData?.products && Array.isArray(serverData.products) && serverData.products.length > 0)
           ? serverData.products
+          : (staticProducts && staticProducts.length > 0)
+          ? staticProducts
           : await idbGet<Product[]>('products');
 
         if (loadedProducts && Array.isArray(loadedProducts) && loadedProducts.length > 0 && isMounted) {

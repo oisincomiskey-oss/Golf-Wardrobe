@@ -66,6 +66,11 @@ function loadProductsFromDisk(): any[] | null {
 function saveProductsToDisk(products: any[]) {
   try {
     fs.writeFileSync(PRODUCTS_FILE_PATH, JSON.stringify(products, null, 2), 'utf-8');
+    const publicDir = path.join(process.cwd(), 'public');
+    if (!fs.existsSync(publicDir)) {
+      fs.mkdirSync(publicDir, { recursive: true });
+    }
+    fs.writeFileSync(path.join(publicDir, 'products.json'), JSON.stringify(products, null, 2), 'utf-8');
   } catch (e) {
     console.error('Failed to save products.json:', e);
   }
@@ -95,6 +100,11 @@ function loadStoreDataFromDisk(): StoreData {
 function saveStoreDataToDisk(data: StoreData) {
   try {
     fs.writeFileSync(STORE_DATA_FILE_PATH, JSON.stringify(data, null, 2), 'utf-8');
+    const publicDir = path.join(process.cwd(), 'public');
+    if (!fs.existsSync(publicDir)) {
+      fs.mkdirSync(publicDir, { recursive: true });
+    }
+    fs.writeFileSync(path.join(publicDir, 'store_data.json'), JSON.stringify(data, null, 2), 'utf-8');
     if (data.products && Array.isArray(data.products)) {
       saveProductsToDisk(data.products);
     }
