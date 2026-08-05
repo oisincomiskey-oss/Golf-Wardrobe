@@ -11,6 +11,13 @@ import {
 import { soundManager } from '../utils/sound';
 import { idbGet, idbSet } from '../utils/idbStorage';
 import { calculateShippingFee, calculateHeadcoverDiscount, createShippingLabelData, generateTrackingNumber } from '../utils/shipping';
+import { 
+  fetchProductsFromSupabase, 
+  saveProductToSupabase, 
+  deleteProductFromSupabase, 
+  batchSaveProductsToSupabase, 
+  isSupabaseConfigured 
+} from '../lib/supabase';
 
 interface Toast {
   id: string;
@@ -136,6 +143,11 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     idbSet(key, value);
     broadcastChange(key, value);
 
+    // Sync store updates to Supabase
+    if (key === 'products' && Array.isArray(value)) {
+      batchSaveProductsToSupabase(value).catch((err) => console.warn('Failed to batch save products to Supabase:', err));
+    }
+
     // Sync store updates to backend server API so all new visitors see updated products, prices, and customizations
     const syncKeys = ['products', 'categories', 'storeSettings', 'customStudioSettings', 'homepage', 'salePromoConfig', 'aiSettings'];
     if (syncKeys.includes(key)) {
@@ -196,8 +208,14 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
           } catch (e) {}
         }
 
+        // 0. Fetch products directly from Supabase if configured
+        let supabaseProducts: Product[] | null = null;
+        if (isSupabaseConfigured()) {
+          supabaseProducts = await fetchProductsFromSupabase();
+        }
+
         let staticProducts: Product[] | null = null;
-        if (!serverData?.products || !Array.isArray(serverData.products) || serverData.products.length === 0) {
+        if (!supabaseProducts && (!serverData?.products || !Array.isArray(serverData.products) || serverData.products.length === 0)) {
           try {
             const staticProdRes = await fetch('/products.json');
             if (staticProdRes.ok) {
@@ -209,8 +227,10 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
           } catch (e) {}
         }
 
-        // Products: Server / Static store takes precedence if available, otherwise fallback to IndexedDB
-        const loadedProducts: Product[] | null = (serverData?.products && Array.isArray(serverData.products) && serverData.products.length > 0)
+        // Products: Supabase takes highest priority, then Server API / Static files, then IndexedDB
+        const loadedProducts: Product[] | null = (supabaseProducts && Array.isArray(supabaseProducts) && supabaseProducts.length > 0)
+          ? supabaseProducts
+          : (serverData?.products && Array.isArray(serverData.products) && serverData.products.length > 0)
           ? serverData.products
           : (staticProducts && staticProducts.length > 0)
           ? staticProducts
@@ -542,6 +562,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       reviewsCount: 0,
       reviews: []
     };
+    saveProductToSupabase(newProduct).catch((err) => console.warn('Supabase add product error:', err));
     setProducts((prev) => {
       const next = [newProduct, ...prev];
       setStored('products', next);
@@ -554,6 +575,10 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const updateProduct = (id: string, updates: Partial<Product>, showToast = true) => {
     setProducts((prev) => {
       const next = prev.map((p) => (p.id === id ? { ...p, ...updates } : p));
+      const updatedProduct = next.find((p) => p.id === id);
+      if (updatedProduct) {
+        saveProductToSupabase(updatedProduct).catch((err) => console.warn('Supabase update product error:', err));
+      }
       setStored('products', next);
       return next;
     });
@@ -563,6 +588,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   };
 
   const deleteProduct = (id: string) => {
+    deleteProductFromSupabase(id).catch((err) => console.warn('Supabase delete product error:', err));
     setProducts((prev) => {
       const next = prev.filter((p) => p.id !== id);
       setStored('products', next);
