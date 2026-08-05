@@ -71,7 +71,7 @@ interface StoreContextType {
 
   // Admin Actions
   addProduct: (product: Omit<Product, 'id'>) => Product;
-  updateProduct: (id: string, updates: Partial<Product>) => void;
+  updateProduct: (id: string, updates: Partial<Product>, showToast?: boolean) => void;
   deleteProduct: (id: string) => void;
   addCategory: (category: Omit<CategoryInfo, 'id'>) => void;
   updateCategory: (id: string, updates: Partial<CategoryInfo>) => void;
@@ -478,13 +478,15 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     return newProduct;
   };
 
-  const updateProduct = (id: string, updates: Partial<Product>) => {
+  const updateProduct = (id: string, updates: Partial<Product>, showToast = true) => {
     setProducts((prev) => {
       const next = prev.map((p) => (p.id === id ? { ...p, ...updates } : p));
       setStored('products', next);
       return next;
     });
-    triggerToast('Product details updated', 'success');
+    if (showToast) {
+      triggerToast('Product details updated', 'success');
+    }
   };
 
   const deleteProduct = (id: string) => {
@@ -502,31 +504,42 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       ...catData,
       id: `cat-${Date.now()}`
     };
-    setCategories((prev) => [...prev, newCat]);
+    setCategories((prev) => {
+      const next = [...prev, newCat];
+      setStored('categories', next);
+      return next;
+    });
     triggerToast(`Category "${newCat.name}" added`, 'success');
   };
 
   const updateCategory = (id: string, updates: Partial<CategoryInfo>) => {
-    setCategories((prev) =>
-      prev.map((c) => (c.id === id ? { ...c, ...updates } : c))
-    );
+    setCategories((prev) => {
+      const next = prev.map((c) => (c.id === id ? { ...c, ...updates } : c));
+      setStored('categories', next);
+      return next;
+    });
     triggerToast('Category updated', 'success');
   };
 
   const deleteCategory = (id: string) => {
-    setCategories((prev) => prev.filter((c) => c.id !== id));
+    setCategories((prev) => {
+      const next = prev.filter((c) => c.id !== id);
+      setStored('categories', next);
+      return next;
+    });
     triggerToast('Category removed', 'info');
   };
 
   const reorderCategories = (newOrder: CategoryInfo[]) => {
     setCategories(newOrder);
+    setStored('categories', newOrder);
     triggerToast('Category order updated', 'success');
   };
 
   // Orders Actions
   const updateOrderStatus = (orderId: string, status: OrderStatus, trackingNumber?: string, carrier?: string) => {
-    setOrders((prev) =>
-      prev.map((ord) => {
+    setOrders((prev) => {
+      const next = prev.map((ord) => {
         if (ord.id === orderId || ord.orderNumber === orderId) {
           const updates: Partial<Order> = { status };
           if (trackingNumber) updates.trackingNumber = trackingNumber;
@@ -536,15 +549,19 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
           return { ...ord, ...updates };
         }
         return ord;
-      })
-    );
+      });
+      setStored('orders', next);
+      return next;
+    });
     triggerToast(`Order status set to ${status}`, 'success');
   };
 
   const updateOrderDetails = (orderId: string, updates: Partial<Order>) => {
-    setOrders((prev) =>
-      prev.map((ord) => (ord.id === orderId || ord.orderNumber === orderId ? { ...ord, ...updates } : ord))
-    );
+    setOrders((prev) => {
+      const next = prev.map((ord) => (ord.id === orderId || ord.orderNumber === orderId ? { ...ord, ...updates } : ord));
+      setStored('orders', next);
+      return next;
+    });
     triggerToast('Order details saved', 'success');
   };
 
@@ -559,8 +576,9 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     const labelData = createShippingLabelData(targetOrder, carrier, weightKg);
     
     // Update order with label, tracking number, carrier and set status to 'Packed' if 'Pending'
-    setOrders((prev) =>
-      prev.map((ord) => {
+    let updatedOrders: Order[] = [];
+    setOrders((prev) => {
+      updatedOrders = prev.map((ord) => {
         if (ord.id === targetOrder.id) {
           return {
             ...ord,
@@ -571,27 +589,39 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
           };
         }
         return ord;
-      })
-    );
+      });
+      setStored('orders', updatedOrders);
+      return updatedOrders;
+    });
 
     triggerToast(`Created ${carrier} Shipping Label with tracking ${labelData.trackingNumber}`, 'success');
     return labelData;
   };
 
   const deleteOrder = (orderId: string) => {
-    setOrders((prev) => prev.filter((ord) => ord.id !== orderId));
+    setOrders((prev) => {
+      const next = prev.filter((ord) => ord.id !== orderId);
+      setStored('orders', next);
+      return next;
+    });
     triggerToast(`Order deleted permanently`, 'info');
   };
 
   const updateCustomOrderStatus = (customId: string, status: CustomHeadcoverConfig['status']) => {
-    setCustomOrders((prev) =>
-      prev.map((c) => (c.id === customId ? { ...c, status } : c))
-    );
+    setCustomOrders((prev) => {
+      const next = prev.map((c) => (c.id === customId ? { ...c, status } : c));
+      setStored('customOrders', next);
+      return next;
+    });
     triggerToast(`Custom order #${customId} status set to ${status}`, 'success');
   };
 
   const deleteCustomOrder = (customId: string) => {
-    setCustomOrders((prev) => prev.filter((c) => c.id !== customId));
+    setCustomOrders((prev) => {
+      const next = prev.filter((c) => c.id !== customId);
+      setStored('customOrders', next);
+      return next;
+    });
     triggerToast(`Custom headcover order deleted permanently`, 'info');
   };
 
@@ -679,17 +709,29 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
   // Config Actions
   const updateHomepageConfig = (updates: Partial<HomepageConfig>) => {
-    setHomepageConfig((prev) => ({ ...prev, ...updates }));
+    setHomepageConfig((prev) => {
+      const next = { ...prev, ...updates };
+      setStored('homepage', next);
+      return next;
+    });
     triggerToast('Homepage configuration updated', 'success');
   };
 
   const updateSalePromoConfig = (updates: Partial<SalePromoConfig>) => {
-    setSalePromoConfig((prev) => ({ ...prev, ...updates }));
+    setSalePromoConfig((prev) => {
+      const next = { ...prev, ...updates };
+      setStored('salePromoConfig', next);
+      return next;
+    });
     triggerToast('Sale & Promotional banner updated', 'success');
   };
 
   const updateAISettings = (updates: Partial<AISettingsConfig>) => {
-    setAiSettings((prev) => ({ ...prev, ...updates }));
+    setAiSettings((prev) => {
+      const next = { ...prev, ...updates };
+      setStored('aiSettings', next);
+      return next;
+    });
     triggerToast('AI Assistant settings updated', 'success');
   };
 
@@ -707,13 +749,18 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
           }
         };
       }
+      setStored('storeSettings', next);
       return next;
     });
     triggerToast('Store settings updated', 'success');
   };
 
   const updateCustomStudioSettings = (updates: Partial<CustomStudioSettings>) => {
-    setCustomStudioSettings((prev) => ({ ...prev, ...updates }));
+    setCustomStudioSettings((prev) => {
+      const next = { ...prev, ...updates };
+      setStored('customStudioSettings', next);
+      return next;
+    });
     triggerToast('Custom studio settings updated', 'success');
   };
 

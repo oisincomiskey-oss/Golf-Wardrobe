@@ -616,7 +616,7 @@ export const AdminPage: React.FC = () => {
                           <input
                             type="text"
                             value={p.name}
-                            onChange={(e) => updateProduct(p.id, { name: e.target.value })}
+                            onChange={(e) => updateProduct(p.id, { name: e.target.value }, false)}
                             className="font-serif font-bold text-[#1A1A1A] text-sm bg-transparent hover:bg-white focus:bg-white border border-transparent hover:border-[#E5DEC9] focus:border-[#C9A24D] rounded-lg px-2 py-1 transition-all w-full focus:outline-none focus:ring-2 focus:ring-[#C9A24D]/20"
                             title="Click to rename this product"
                           />
@@ -637,9 +637,24 @@ export const AdminPage: React.FC = () => {
                       </div>
                     </td>
                     <td className="p-4 font-serif font-bold text-[#1A1A1A]">
-                      {storeSettings.currencySymbol}{p.price.toFixed(2)}
+                      <div className="flex items-center gap-1 group relative">
+                        <span className="text-[#8C827A] text-xs font-normal">{storeSettings.currencySymbol}</span>
+                        <input
+                          type="number"
+                          step="0.01"
+                          min="0"
+                          value={p.price}
+                          onChange={(e) => {
+                            const val = parseFloat(e.target.value);
+                            updateProduct(p.id, { price: isNaN(val) ? 0 : val }, false);
+                          }}
+                          className="w-24 bg-transparent hover:bg-white focus:bg-white border border-transparent hover:border-[#E5DEC9] focus:border-[#C9A24D] rounded-lg px-2 py-1 text-sm font-serif font-bold text-[#1A1A1A] focus:outline-none focus:ring-2 focus:ring-[#C9A24D]/20 transition-all"
+                          title="Click to edit price directly"
+                        />
+                        <Edit className="w-3 h-3 text-gray-300 group-hover:text-[#C9A24D] shrink-0 pointer-events-none transition-colors" />
+                      </div>
                       {p.originalPrice && (
-                        <span className="block text-[10px] text-red-500 line-through">
+                        <span className="block text-[10px] text-red-500 line-through mt-0.5 pl-3">
                           {storeSettings.currencySymbol}{p.originalPrice.toFixed(2)}
                         </span>
                       )}
@@ -649,7 +664,7 @@ export const AdminPage: React.FC = () => {
                         type="number"
                         min="0"
                         value={p.stock}
-                        onChange={(e) => updateProduct(p.id, { stock: Number(e.target.value) })}
+                        onChange={(e) => updateProduct(p.id, { stock: Number(e.target.value) }, false)}
                         className="w-16 bg-[#FAF8F5] border border-[#E5DEC9] rounded-lg px-2 py-1 text-center font-bold"
                       />
                     </td>
