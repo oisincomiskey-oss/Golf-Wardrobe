@@ -186,9 +186,9 @@ export const ProductDetailPage: React.FC = () => {
             </div>
 
             <div className="bg-emerald-50 border border-emerald-200 text-emerald-900 rounded-xl p-2.5 px-3.5 mb-4 text-xs font-semibold flex items-center justify-between">
-              <span>🎉 5% Off Each Headcover Added</span>
+              <span>🎉 Multi-Buy Bundle Offer</span>
               <span className="font-bold text-emerald-800">
-                Pay {storeSettings.currencySymbol}{(product.price * 0.95).toFixed(2)} in Cart
+                Get 5% Off Every Additional Headcover Added
               </span>
             </div>
 

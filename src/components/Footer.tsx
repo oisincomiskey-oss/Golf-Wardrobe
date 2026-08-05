@@ -10,7 +10,7 @@ export const Footer: React.FC = () => {
   const handleNewsletter = (e: React.FormEvent) => {
     e.preventDefault();
     if (newsletterEmail) {
-      triggerToast('Thank you for subscribing to The Wardrobe Club! Check your inbox for your 10% welcome code.', 'success');
+      triggerToast('Thank you for subscribing to The Wardrobe Club! Welcome to the community.', 'success');
       setNewsletterEmail('');
     }
   };
@@ -153,7 +153,7 @@ export const Footer: React.FC = () => {
               The Wardrobe Club
             </h4>
             <p className="text-xs text-gray-400 mb-3">
-              Subscribe for limited-run alerts & 10% off your initial order.
+              Subscribe for limited-run alerts & exclusive member releases.
             </p>
             <form onSubmit={handleNewsletter} className="space-y-2">
               <input

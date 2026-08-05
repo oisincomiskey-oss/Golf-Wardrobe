@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useStore } from '../context/StoreContext';
-import { calculateShippingFee } from '../utils/shipping';
+import { calculateShippingFee, calculateHeadcoverDiscount } from '../utils/shipping';
 import { X, Trash2, Plus, Minus, ShoppingBag, ArrowRight, Tag, Truck, ShieldCheck, Sparkles } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
@@ -22,7 +22,7 @@ export const CartDrawer: React.FC = () => {
   const [couponInput, setCouponInput] = useState('');
 
   const subtotal = cart.reduce((sum, item) => sum + item.product.price * item.quantity, 0);
-  const headcoverDiscountAmount = cart.reduce((sum, item) => sum + (item.product.price * 0.05) * item.quantity, 0);
+  const headcoverDiscountAmount = calculateHeadcoverDiscount(cart);
   const headcoversSubtotal = subtotal - headcoverDiscountAmount;
   const couponDiscountAmount = (headcoversSubtotal * couponDiscountPercent) / 100;
   const discountedSubtotal = headcoversSubtotal - couponDiscountAmount;
@@ -33,6 +33,7 @@ export const CartDrawer: React.FC = () => {
     ? 0 
     : calculateShippingFee(cart, 'Ireland', discountedSubtotal, storeSettings.shippingSettings);
   const grandTotal = discountedSubtotal + shippingFee;
+  const totalCartUnits = cart.reduce((sum, item) => sum + item.quantity, 0);
 
   const handleCouponSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -124,8 +125,6 @@ export const CartDrawer: React.FC = () => {
             ) : (
               cart.map((item) => {
                 const itemOriginalTotal = item.product.price * item.quantity;
-                const itemHeadcoverDiscount = (item.product.price * 0.05) * item.quantity;
-                const itemDiscountedTotal = itemOriginalTotal - itemHeadcoverDiscount;
 
                 return (
                   <div key={item.product.id} className="py-4 flex gap-4 first:pt-0 last:pb-0">
@@ -158,9 +157,15 @@ export const CartDrawer: React.FC = () => {
                           <span className="text-xs text-[#C9A24D] font-medium">
                             Fit: {item.selectedClubFit || item.product.clubFit}
                           </span>
-                          <span className="bg-emerald-100 text-emerald-800 text-[10px] font-bold px-1.5 py-0.5 rounded-sm">
-                            5% Headcover Discount
-                          </span>
+                          {totalCartUnits > 1 ? (
+                            <span className="bg-emerald-100 text-emerald-800 text-[10px] font-bold px-1.5 py-0.5 rounded-sm">
+                              Multi-Buy Discount
+                            </span>
+                          ) : (
+                            <span className="bg-gray-100 text-gray-700 text-[10px] font-bold px-1.5 py-0.5 rounded-sm">
+                              1st Item Standard Price
+                            </span>
+                          )}
                         </div>
                       </div>
 
@@ -182,9 +187,6 @@ export const CartDrawer: React.FC = () => {
                         </div>
                         <div className="text-right">
                           <span className="font-serif text-sm font-bold text-[#1A1A1A] block">
-                            {storeSettings.currencySymbol}{itemDiscountedTotal.toFixed(2)}
-                          </span>
-                          <span className="text-[10px] text-gray-400 line-through block">
                             {storeSettings.currencySymbol}{itemOriginalTotal.toFixed(2)}
                           </span>
                         </div>
@@ -239,10 +241,19 @@ export const CartDrawer: React.FC = () => {
                   <span className="font-semibold text-gray-900">{storeSettings.currencySymbol}{subtotal.toFixed(2)}</span>
                 </div>
 
-                <div className="flex justify-between text-emerald-700 font-semibold">
-                  <span>5% Off Every Headcover</span>
-                  <span>-{storeSettings.currencySymbol}{headcoverDiscountAmount.toFixed(2)}</span>
-                </div>
+                {headcoverDiscountAmount > 0 ? (
+                  <div className="flex justify-between text-emerald-700 font-semibold">
+                    <span>Multi-Buy Discount (5% Off 2nd+ Item)</span>
+                    <span>-{storeSettings.currencySymbol}{headcoverDiscountAmount.toFixed(2)}</span>
+                  </div>
+                ) : (
+                  totalCartUnits === 1 && (
+                    <div className="bg-amber-50 border border-amber-200 text-amber-900 p-2 rounded-lg text-[11px] font-medium flex items-center justify-between">
+                      <span>💡 Add 1 more headcover to get 5% off!</span>
+                      <button onClick={() => { closeCart(); navigateTo('shop'); }} className="underline font-bold">Shop Now</button>
+                    </div>
+                  )
+                )}
 
                 {couponDiscountAmount > 0 && (
                   <div className="flex justify-between text-emerald-700">

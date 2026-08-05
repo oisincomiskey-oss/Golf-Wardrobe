@@ -58,6 +58,35 @@ export function countTotalHeadcovers(cartItems: CartItem[]): number {
   return cartItems.reduce((acc, item) => acc + (item.quantity || 1), 0);
 }
 
+/**
+ * Calculates 5% discount on every headcover added AFTER the 1st headcover.
+ * The 1st headcover is charged full price.
+ * (If headcovers have different prices, the highest priced one is kept at full charge).
+ */
+export function calculateHeadcoverDiscount(cartItems: CartItem[]): number {
+  if (!cartItems || cartItems.length === 0) return 0;
+
+  const unitPrices: number[] = [];
+  cartItems.forEach((item) => {
+    for (let i = 0; i < (item.quantity || 1); i++) {
+      unitPrices.push(item.product.price);
+    }
+  });
+
+  if (unitPrices.length <= 1) return 0;
+
+  // Sort descending so the 1st (most expensive) headcover is full price
+  unitPrices.sort((a, b) => b - a);
+
+  // Each additional headcover gets 5% off
+  let discount = 0;
+  for (let i = 1; i < unitPrices.length; i++) {
+    discount += unitPrices[i] * 0.05;
+  }
+
+  return Number(discount.toFixed(2));
+}
+
 export function calculateShippingFee(
   cartItems: CartItem[],
   customerCountry: string,

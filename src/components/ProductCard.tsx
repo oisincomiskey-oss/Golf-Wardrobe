@@ -196,7 +196,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product, layout = 'gri
             )}
           </div>
           <span className="text-[10px] bg-emerald-100 text-emerald-800 font-bold px-2 py-0.5 rounded-md">
-            5% Off In Cart
+            5% Off 2nd+ Item
           </span>
         </div>
       </div>

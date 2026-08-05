@@ -61,7 +61,7 @@ Dublin, Ireland`;
 
   const handleSendNotification = () => {
     updateOrderStatus(order.id, 'Shipped', trackingNumber, carrier);
-    triggerToast(`Customer notification dispatched to ${order.customer.email}!`, 'success');
+    triggerToast(`Order status updated to Shipped with ${carrier} tracking!`, 'success');
     onClose();
   };
 
@@ -175,7 +175,7 @@ Dublin, Ireland`;
 
         {/* FOOTER */}
         <div className="bg-gray-50 px-6 py-4 border-t border-[#E5DEC9] flex items-center justify-between shrink-0">
-          <span className="text-xs text-gray-500">Sends instant dispatch notice & updates order to Shipped</span>
+          <span className="text-xs text-gray-500">Updates live website tracking info & marks order as Shipped</span>
           <div className="flex items-center gap-2">
             <button
               onClick={onClose}
@@ -187,7 +187,7 @@ Dublin, Ireland`;
               onClick={handleSendNotification}
               className="bg-emerald-700 hover:bg-emerald-800 text-white px-6 py-2.5 rounded-xl text-xs font-bold uppercase tracking-wider flex items-center gap-2 shadow-xs cursor-pointer transition-colors"
             >
-              <Send className="w-4 h-4" /> Send Notification & Mark Shipped
+              <Send className="w-4 h-4" /> Save Tracking & Mark Shipped
             </button>
           </div>
         </div>

@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useStore } from '../context/StoreContext';
-import { calculateShippingFee } from '../utils/shipping';
+import { calculateShippingFee, calculateHeadcoverDiscount } from '../utils/shipping';
 import { CustomerDetails, Order } from '../types';
 import { 
   ShieldCheck, Lock, CreditCard, Truck, Check, ArrowRight, 
@@ -35,7 +35,7 @@ export const CheckoutPage: React.FC = () => {
   const [cardCvc, setCardCvc] = useState('888');
 
   const subtotal = cart.reduce((sum, item) => sum + item.product.price * item.quantity, 0);
-  const headcoverDiscountAmount = cart.reduce((sum, item) => sum + (item.product.price * 0.05) * item.quantity, 0);
+  const headcoverDiscountAmount = calculateHeadcoverDiscount(cart);
   const headcoversSubtotal = subtotal - headcoverDiscountAmount;
   const couponDiscountAmount = (headcoversSubtotal * couponDiscountPercent) / 100;
   const discountedSubtotal = headcoversSubtotal - couponDiscountAmount;
@@ -111,7 +111,7 @@ export const CheckoutPage: React.FC = () => {
               Order #{completedOrder.orderNumber} Confirmed
             </h1>
             <p className="text-xs sm:text-sm text-gray-600 max-w-md mx-auto">
-              We have dispatched a confirmation receipt to <strong className="text-[#1A1A1A]">{completedOrder.customer.email}</strong>. Your luxury headcovers are being hand-packaged with care.
+              Your order has been confirmed! You can track your order status and live delivery progress anytime directly on the website under your <strong className="text-[#1A1A1A]">Account Order History</strong>.
             </p>
           </div>
 
@@ -526,8 +526,6 @@ export const CheckoutPage: React.FC = () => {
           <div className="divide-y divide-[#F5F1E8] max-h-60 overflow-y-auto">
             {cart.map((item) => {
               const itemOriginalTotal = item.product.price * item.quantity;
-              const itemHeadcoverDiscount = (item.product.price * 0.05) * item.quantity;
-              const itemDiscountedTotal = itemOriginalTotal - itemHeadcoverDiscount;
 
               return (
                 <div key={item.product.id} className="py-3 flex items-center justify-between gap-3 text-xs">
@@ -536,14 +534,10 @@ export const CheckoutPage: React.FC = () => {
                     <div>
                       <p className="font-serif font-semibold text-[#1A1A1A] line-clamp-1">{item.product.name}</p>
                       <p className="text-gray-400">Qty: {item.quantity} • {item.selectedClubFit || item.product.clubFit}</p>
-                      <span className="text-[10px] text-emerald-700 font-bold">5% Off Headcover</span>
                     </div>
                   </div>
                   <div className="text-right">
                     <span className="font-serif font-bold text-[#1A1A1A] block">
-                      {storeSettings.currencySymbol}{itemDiscountedTotal.toFixed(2)}
-                    </span>
-                    <span className="text-[10px] text-gray-400 line-through block">
                       {storeSettings.currencySymbol}{itemOriginalTotal.toFixed(2)}
                     </span>
                   </div>
@@ -558,10 +552,12 @@ export const CheckoutPage: React.FC = () => {
               <span className="font-semibold text-gray-900">{storeSettings.currencySymbol}{subtotal.toFixed(2)}</span>
             </div>
 
-            <div className="flex justify-between text-emerald-700 font-semibold">
-              <span>5% Off Every Headcover</span>
-              <span>-{storeSettings.currencySymbol}{headcoverDiscountAmount.toFixed(2)}</span>
-            </div>
+            {headcoverDiscountAmount > 0 && (
+              <div className="flex justify-between text-emerald-700 font-semibold">
+                <span>Multi-Buy Discount (5% Off 2nd+ Item)</span>
+                <span>-{storeSettings.currencySymbol}{headcoverDiscountAmount.toFixed(2)}</span>
+              </div>
+            )}
 
             {couponDiscountAmount > 0 && (
               <div className="flex justify-between text-emerald-700">

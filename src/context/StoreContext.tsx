@@ -10,7 +10,7 @@ import {
 } from '../data/initialData';
 import { soundManager } from '../utils/sound';
 import { idbGet, idbSet } from '../utils/idbStorage';
-import { calculateShippingFee, createShippingLabelData, generateTrackingNumber } from '../utils/shipping';
+import { calculateShippingFee, calculateHeadcoverDiscount, createShippingLabelData, generateTrackingNumber } from '../utils/shipping';
 
 interface Toast {
   id: string;
@@ -153,16 +153,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const [adminTab, setAdminTab] = useState<string>('dashboard');
 
   // Core Data States
-  const [products, setProducts] = useState<Product[]>(() => {
-    const saved = getStored<Product[]>('products', INITIAL_PRODUCTS);
-    if (!Array.isArray(saved) || saved.length === 0) return INITIAL_PRODUCTS;
-    const isOldSample = saved.some(p => p.name.includes('Florentine Saddle Leather') || p.name.includes('Emerald Shamrock Blade'));
-    if (isOldSample) {
-      setStored('products', INITIAL_PRODUCTS);
-      return INITIAL_PRODUCTS;
-    }
-    return saved;
-  });
+  const [products, setProducts] = useState<Product[]>(() => getStored('products', INITIAL_PRODUCTS));
   const [categories, setCategories] = useState<CategoryInfo[]>(() => getStored('categories', INITIAL_CATEGORIES));
   const [cart, setCart] = useState<CartItem[]>(() => getStored('cart', []));
   const [wishlist, setWishlist] = useState<string[]>(() => getStored('wishlist', ['prod-1', 'prod-3']));
@@ -175,36 +166,36 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const [storeSettings, setStoreSettings] = useState<StoreSettings>(() => getStored('storeSettings', INITIAL_STORE_SETTINGS));
   const [customStudioSettings, setCustomStudioSettings] = useState<CustomStudioSettings>(() => getStored('customStudioSettings', INITIAL_CUSTOM_STUDIO_SETTINGS));
 
-  // Asynchronous rehydration from Backend API and IndexedDB on initial mount
+  // Asynchronous rehydration from IndexedDB and Backend API on initial mount
   useEffect(() => {
     let isMounted = true;
     async function loadIndexedDB() {
       try {
         let loadedProducts: Product[] | null = null;
-        // First try fetching server-side products if available
-        try {
-          const apiRes = await fetch('/api/products');
-          if (apiRes.ok) {
-            const apiData = await apiRes.json();
-            if (apiData?.products && Array.isArray(apiData.products) && apiData.products.length > 0) {
-              loadedProducts = apiData.products;
-            }
-          }
-        } catch (e) {}
+        
+        // 1. Check IndexedDB first for locally saved/updated products
+        const savedProducts = await idbGet<Product[]>('products');
+        if (savedProducts && Array.isArray(savedProducts) && savedProducts.length > 0) {
+          loadedProducts = savedProducts;
+        }
 
+        // 2. If IndexedDB is empty, fall back to server-side products store if available
         if (!loadedProducts) {
-          const savedProducts = await idbGet<Product[]>('products');
-          if (savedProducts && Array.isArray(savedProducts) && savedProducts.length > 0) {
-            loadedProducts = savedProducts;
-          }
+          try {
+            const apiRes = await fetch('/api/products');
+            if (apiRes.ok) {
+              const apiData = await apiRes.json();
+              if (apiData?.products && Array.isArray(apiData.products) && apiData.products.length > 0) {
+                loadedProducts = apiData.products;
+              }
+            }
+          } catch (e) {}
         }
 
         if (loadedProducts && isMounted) {
-          const isOldSample = loadedProducts.some(p => p.name.includes('Florentine Saddle Leather') || p.name.includes('Emerald Shamrock Blade'));
-          const finalProducts = isOldSample ? INITIAL_PRODUCTS : loadedProducts;
-          setProducts(finalProducts);
-          // Keep local storage & IndexedDB updated with latest server state
-          setStored('products', finalProducts);
+          setProducts(loadedProducts);
+          // Keep local storage & IndexedDB updated with latest state
+          setStored('products', loadedProducts);
         }
 
         const savedCategories = await idbGet<CategoryInfo[]>('categories');
@@ -606,7 +597,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
   const placeOrder = (customerDetails: CustomerDetails, paymentMethod: string, shippingFeeOverride?: number): Order => {
     const subtotal = cart.reduce((sum, item) => sum + item.product.price * item.quantity, 0);
-    const headcoverDiscount = cart.reduce((sum, item) => sum + (item.product.price * 0.05) * item.quantity, 0);
+    const headcoverDiscount = calculateHeadcoverDiscount(cart);
     const headcoversSubtotal = subtotal - headcoverDiscount;
     const couponDiscountAmount = (headcoversSubtotal * couponDiscountPercent) / 100;
     const discountedSubtotal = headcoversSubtotal - couponDiscountAmount;
@@ -632,7 +623,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       items: cart.map((item) => ({
         productId: item.product.id,
         name: item.product.name,
-        price: Number((item.product.price * 0.95).toFixed(2)),
+        price: item.product.price,
         quantity: item.quantity,
         image: item.product.image,
         clubFit: item.selectedClubFit || item.product.clubFit,

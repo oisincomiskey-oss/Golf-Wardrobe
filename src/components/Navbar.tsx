@@ -45,7 +45,7 @@ export const Navbar: React.FC = () => {
       {/* Top Announcement Bar */}
       <div className="bg-[#0D382C] text-white text-[10px] sm:text-xs py-2 px-6 text-center font-bold uppercase tracking-wider flex items-center justify-center gap-2">
         <span className="text-base">🎉</span>
-        <span>Get 5% Off Every Headcover Added to Cart • Free Ireland Delivery Over €75</span>
+        <span>Get 5% Off Every Additional Headcover Added To Cart • Free Ireland Delivery Over €75</span>
       </div>
 
       {/* Main Header Container */}
