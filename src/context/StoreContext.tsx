@@ -212,6 +212,14 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         let supabaseProducts: Product[] | null = null;
         if (isSupabaseConfigured()) {
           supabaseProducts = await fetchProductsFromSupabase();
+          // Auto-seed default products to Supabase if table is currently empty
+          if (supabaseProducts !== null && supabaseProducts.length === 0) {
+            const seedList = (serverData?.products && Array.isArray(serverData.products) && serverData.products.length > 0)
+              ? serverData.products
+              : INITIAL_PRODUCTS;
+            await batchSaveProductsToSupabase(seedList);
+            supabaseProducts = await fetchProductsFromSupabase() || seedList;
+          }
         }
 
         let staticProducts: Product[] | null = null;
@@ -228,7 +236,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         }
 
         // Products: Supabase takes highest priority, then Server API / Static files, then IndexedDB
-        const loadedProducts: Product[] | null = (supabaseProducts && Array.isArray(supabaseProducts) && supabaseProducts.length > 0)
+        const loadedProducts: Product[] | null = (supabaseProducts && Array.isArray(supabaseProducts))
           ? supabaseProducts
           : (serverData?.products && Array.isArray(serverData.products) && serverData.products.length > 0)
           ? serverData.products
@@ -562,7 +570,14 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       reviewsCount: 0,
       reviews: []
     };
-    saveProductToSupabase(newProduct).catch((err) => console.warn('Supabase add product error:', err));
+    saveProductToSupabase(newProduct).then((res) => {
+      if (res && res.success) {
+        triggerToast(`Saved "${newProduct.name}" to Supabase database!`, 'success');
+      } else if (res && !res.success) {
+        console.warn('Supabase add product error:', res.error);
+        triggerToast(`Supabase Sync Warning: ${res.error || 'Failed to save to database'}`, 'error');
+      }
+    });
     setProducts((prev) => {
       const next = [newProduct, ...prev];
       setStored('products', next);
@@ -577,7 +592,14 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       const next = prev.map((p) => (p.id === id ? { ...p, ...updates } : p));
       const updatedProduct = next.find((p) => p.id === id);
       if (updatedProduct) {
-        saveProductToSupabase(updatedProduct).catch((err) => console.warn('Supabase update product error:', err));
+        saveProductToSupabase(updatedProduct).then((res) => {
+          if (res && res.success) {
+            console.log('Product update written to Supabase:', id);
+          } else if (res && !res.success) {
+            console.warn('Supabase update product error:', res.error);
+            triggerToast(`Supabase Update Warning: ${res.error || 'Failed to update DB'}`, 'error');
+          }
+        });
       }
       setStored('products', next);
       return next;
@@ -588,7 +610,11 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   };
 
   const deleteProduct = (id: string) => {
-    deleteProductFromSupabase(id).catch((err) => console.warn('Supabase delete product error:', err));
+    deleteProductFromSupabase(id).then((success) => {
+      if (!success) {
+        console.warn('Failed to delete product from Supabase:', id);
+      }
+    });
     setProducts((prev) => {
       const next = prev.filter((p) => p.id !== id);
       setStored('products', next);
