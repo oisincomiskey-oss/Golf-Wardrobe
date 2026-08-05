@@ -157,6 +157,13 @@ export async function saveProductToSupabase(product: Product): Promise<{ success
       console.log('Successfully saved product to Supabase (snake_case):', product.id, product.name);
       return { success: true };
     }
+    
+    if (snakeErr.message && snakeErr.message.toLowerCase().includes('permission denied')) {
+      return {
+        success: false,
+        error: 'Permission denied for table products (Row Level Security active). Please run the updated SQL script in supabase_schema.sql inside your Supabase SQL Editor to grant RLS policies.'
+      };
+    }
     console.warn('Snake case upsert failed, trying camelCase payload fallback:', snakeErr.message);
   } catch (e: any) {
     console.warn('Snake case upsert network error:', e?.message || e);
