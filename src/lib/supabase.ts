@@ -15,12 +15,12 @@ const getEnv = (key: string): string => {
 export const SUPABASE_URL =
   getEnv('VITE_SUPABASE_URL') ||
   getEnv('SUPABASE_URL') ||
-  'https://your-supabase-project.supabase.co';
+  'https://ymeuyzmwvivjfkrfuall.supabase.co';
 
 export const SUPABASE_ANON_KEY =
   getEnv('VITE_SUPABASE_ANON_KEY') ||
   getEnv('SUPABASE_ANON_KEY') ||
-  'your-anon-key';
+  'sb_publishable_m099ZWTeqsS6_UObt5H3pw_z0TnQnmw';
 
 export const isSupabaseConfigured = (): boolean => {
   return (
@@ -138,8 +138,8 @@ export async function fetchProductsFromSupabase(): Promise<Product[] | null> {
     if (data && Array.isArray(data)) {
       return data.map(transformFromSupabase);
     }
-  } catch (err) {
-    console.warn('Failed to fetch products from Supabase:', err);
+  } catch (err: any) {
+    console.warn('Failed to fetch products from Supabase:', err?.message || err);
   }
   return null;
 }
@@ -148,28 +148,41 @@ export async function saveProductToSupabase(product: Product): Promise<{ success
   if (!isSupabaseConfigured()) {
     return { success: false, error: 'Supabase credentials are not configured in environment.' };
   }
+
+  // 1. Try snake_case payload
   try {
-    // 1. Try snake_case payload
     const snakePayload = transformToSupabaseSnakeCase(product);
     const { error: snakeErr } = await supabase.from('products').upsert(snakePayload);
     if (!snakeErr) {
       console.log('Successfully saved product to Supabase (snake_case):', product.id, product.name);
       return { success: true };
     }
-
     console.warn('Snake case upsert failed, trying camelCase payload fallback:', snakeErr.message);
+  } catch (e: any) {
+    console.warn('Snake case upsert network error:', e?.message || e);
+    return { 
+      success: false, 
+      error: e?.name === 'TypeError' || (e?.message && e.message.includes('fetch'))
+        ? 'Network connection error (Failed to fetch). Please check your Supabase URL and connection.'
+        : (e?.message || 'Network error connecting to Supabase')
+    };
+  }
 
-    // 2. Try camelCase payload
+  // 2. Try camelCase payload
+  try {
     const camelPayload = transformToSupabaseCamelCase(product);
     const { error: camelErr } = await supabase.from('products').upsert(camelPayload);
     if (!camelErr) {
       console.log('Successfully saved product to Supabase (camelCase):', product.id, product.name);
       return { success: true };
     }
-
     console.warn('Camel case upsert failed, trying minimal basic payload fallback:', camelErr.message);
+  } catch (e: any) {
+    console.warn('Camel case upsert error:', e?.message || e);
+  }
 
-    // 3. Fallback to minimal core columns if custom columns do not exist
+  // 3. Fallback to minimal core columns if custom columns do not exist
+  try {
     const minimalPayload = {
       id: String(product.id),
       name: product.name,
@@ -186,11 +199,10 @@ export async function saveProductToSupabase(product: Product): Promise<{ success
       console.log('Successfully saved product to Supabase (minimal):', product.id, product.name);
       return { success: true };
     }
-
     console.error('All Supabase save attempts failed:', minErr.message);
     return { success: false, error: minErr.message };
   } catch (err: any) {
-    console.error('Failed to save product to Supabase:', err);
+    console.error('Failed to save product to Supabase:', err?.message || err);
     return { success: false, error: err?.message || 'Unknown network error' };
   }
 }

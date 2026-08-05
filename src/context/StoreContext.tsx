@@ -597,7 +597,9 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
             console.log('Product update written to Supabase:', id);
           } else if (res && !res.success) {
             console.warn('Supabase update product error:', res.error);
-            triggerToast(`Supabase Update Warning: ${res.error || 'Failed to update DB'}`, 'error');
+            if (showToast) {
+              triggerToast(`Supabase Update Warning: ${res.error || 'Failed to update DB'}`, 'error');
+            }
           }
         });
       }
