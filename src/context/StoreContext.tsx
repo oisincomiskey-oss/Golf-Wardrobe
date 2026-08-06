@@ -16,6 +16,9 @@ import {
   saveProductToSupabase, 
   deleteProductFromSupabase, 
   batchSaveProductsToSupabase, 
+  fetchOrdersFromSupabase,
+  saveOrderToSupabase,
+  deleteOrderFromSupabase,
   isSupabaseConfigured 
 } from '../lib/supabase';
 
@@ -134,7 +137,10 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     }
   };
 
+  const isSyncingFromRemote = useRef(false);
+
   const setStored = (key: string, value: any) => {
+    if (isSyncingFromRemote.current) return;
     try {
       localStorage.setItem(`golf_wardrobe_${key}`, JSON.stringify(value));
     } catch (e) {
@@ -314,11 +320,24 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
           idbSet('aiSettings', loadedAiSettings);
         }
 
-        // Personal session data from IndexedDB
-        const savedOrders = await idbGet<Order[]>('orders');
-        if (savedOrders && Array.isArray(savedOrders) && isMounted) {
-          setOrders(savedOrders);
+        // Orders: Fetch from Supabase first if configured, then merge with local IndexedDB
+        let supabaseOrders: Order[] | null = null;
+        if (isSupabaseConfigured()) {
+          supabaseOrders = await fetchOrdersFromSupabase();
         }
+        const savedOrders = await idbGet<Order[]>('orders');
+        const combinedOrdersMap = new Map<string, Order>();
+        if (Array.isArray(savedOrders)) {
+          savedOrders.forEach((o) => combinedOrdersMap.set(o.id, o));
+        }
+        if (Array.isArray(supabaseOrders)) {
+          supabaseOrders.forEach((o) => combinedOrdersMap.set(o.id, o));
+        }
+        const initialOrdersList = Array.from(combinedOrdersMap.values());
+        if (initialOrdersList.length > 0 && isMounted) {
+          setOrders(initialOrdersList);
+        }
+
         const savedCustomOrders = await idbGet<CustomHeadcoverConfig[]>('customOrders');
         if (savedCustomOrders && Array.isArray(savedCustomOrders) && isMounted) {
           setCustomOrders(savedCustomOrders);
@@ -350,14 +369,19 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         bc.onmessage = (event) => {
           if (event.data && event.data.type === 'STORE_UPDATE') {
             const { key, value } = event.data;
-            if (key === 'products' && Array.isArray(value)) setProducts(value);
-            if (key === 'categories' && Array.isArray(value)) setCategories(value);
-            if (key === 'orders' && Array.isArray(value)) setOrders(value);
-            if (key === 'customOrders' && Array.isArray(value)) setCustomOrders(value);
-            if (key === 'homepage' && value) setHomepageConfig(value);
-            if (key === 'salePromoConfig' && value) setSalePromoConfig(value);
-            if (key === 'storeSettings' && value) setStoreSettings(value);
-            if (key === 'customStudioSettings' && value) setCustomStudioSettings(value);
+            isSyncingFromRemote.current = true;
+            try {
+              if (key === 'products' && Array.isArray(value)) setProducts(value);
+              if (key === 'categories' && Array.isArray(value)) setCategories(value);
+              if (key === 'orders' && Array.isArray(value)) setOrders(value);
+              if (key === 'customOrders' && Array.isArray(value)) setCustomOrders(value);
+              if (key === 'homepage' && value) setHomepageConfig(value);
+              if (key === 'salePromoConfig' && value) setSalePromoConfig(value);
+              if (key === 'storeSettings' && value) setStoreSettings(value);
+              if (key === 'customStudioSettings' && value) setCustomStudioSettings(value);
+            } finally {
+              setTimeout(() => { isSyncingFromRemote.current = false; }, 100);
+            }
           }
         };
       }
@@ -367,11 +391,16 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       if (!e.key || !e.newValue) return;
       try {
         const val = JSON.parse(e.newValue);
-        if (e.key === 'golf_wardrobe_products' && Array.isArray(val)) setProducts(val);
-        if (e.key === 'golf_wardrobe_categories' && Array.isArray(val)) setCategories(val);
-        if (e.key === 'golf_wardrobe_orders' && Array.isArray(val)) setOrders(val);
-        if (e.key === 'golf_wardrobe_homepage') setHomepageConfig(val);
-        if (e.key === 'golf_wardrobe_storeSettings') setStoreSettings(val);
+        isSyncingFromRemote.current = true;
+        try {
+          if (e.key === 'golf_wardrobe_products' && Array.isArray(val)) setProducts(val);
+          if (e.key === 'golf_wardrobe_categories' && Array.isArray(val)) setCategories(val);
+          if (e.key === 'golf_wardrobe_orders' && Array.isArray(val)) setOrders(val);
+          if (e.key === 'golf_wardrobe_homepage') setHomepageConfig(val);
+          if (e.key === 'golf_wardrobe_storeSettings') setStoreSettings(val);
+        } finally {
+          setTimeout(() => { isSyncingFromRemote.current = false; }, 100);
+        }
       } catch (err) {}
     };
 
@@ -666,6 +695,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   // Orders Actions
   const updateOrderStatus = (orderId: string, status: OrderStatus, trackingNumber?: string, carrier?: string) => {
     setOrders((prev) => {
+      let updatedOrder: Order | null = null;
       const next = prev.map((ord) => {
         if (ord.id === orderId || ord.orderNumber === orderId) {
           const updates: Partial<Order> = { status };
@@ -673,11 +703,13 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
           if (carrier) updates.carrier = carrier;
           if (status === 'Shipped' && !ord.shippedAt) updates.shippedAt = new Date().toISOString();
           if (status === 'Delivered' && !ord.deliveredAt) updates.deliveredAt = new Date().toISOString();
-          return { ...ord, ...updates };
+          updatedOrder = { ...ord, ...updates };
+          return updatedOrder;
         }
         return ord;
       });
       setStored('orders', next);
+      if (updatedOrder) saveOrderToSupabase(updatedOrder);
       return next;
     });
     triggerToast(`Order status set to ${status}`, 'success');
@@ -685,8 +717,16 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
   const updateOrderDetails = (orderId: string, updates: Partial<Order>) => {
     setOrders((prev) => {
-      const next = prev.map((ord) => (ord.id === orderId || ord.orderNumber === orderId ? { ...ord, ...updates } : ord));
+      let updatedOrder: Order | null = null;
+      const next = prev.map((ord) => {
+        if (ord.id === orderId || ord.orderNumber === orderId) {
+          updatedOrder = { ...ord, ...updates };
+          return updatedOrder;
+        }
+        return ord;
+      });
       setStored('orders', next);
+      if (updatedOrder) saveOrderToSupabase(updatedOrder);
       return next;
     });
     triggerToast('Order details saved', 'success');
@@ -704,20 +744,23 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     
     // Update order with label, tracking number, carrier and set status to 'Packed' if 'Pending'
     let updatedOrders: Order[] = [];
+    let labelOrder: Order | null = null;
     setOrders((prev) => {
       updatedOrders = prev.map((ord) => {
         if (ord.id === targetOrder.id) {
-          return {
+          labelOrder = {
             ...ord,
             trackingNumber: labelData.trackingNumber,
             carrier: labelData.carrier,
             shippingLabel: labelData,
             status: ord.status === 'Pending' ? 'Packed' : ord.status
           };
+          return labelOrder;
         }
         return ord;
       });
       setStored('orders', updatedOrders);
+      if (labelOrder) saveOrderToSupabase(labelOrder);
       return updatedOrders;
     });
 
@@ -729,6 +772,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     setOrders((prev) => {
       const next = prev.filter((ord) => ord.id !== orderId);
       setStored('orders', next);
+      deleteOrderFromSupabase(orderId);
       return next;
     });
     triggerToast(`Order deleted permanently`, 'info');
@@ -798,6 +842,15 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     };
 
     setOrders((prev) => [newOrder, ...prev]);
+
+    // Save customer order directly to Supabase
+    saveOrderToSupabase(newOrder).then((res) => {
+      if (res && res.success) {
+        console.log('Customer storefront order successfully persisted to Supabase:', newOrder.id, newOrder.orderNumber);
+      } else {
+        console.warn('Customer storefront order saved locally, Supabase status:', res?.error);
+      }
+    });
 
     // Update or add customer record
     setCustomers((prev) => {

@@ -1,5 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
-import { Product, CategoryInfo, StoreSettings } from '../types';
+import { Product, Order, CategoryInfo, StoreSettings } from '../types';
 
 // Obtain environment variables safely for Vite client or Node environments
 const getEnv = (key: string): string => {
@@ -241,3 +241,113 @@ export async function batchSaveProductsToSupabase(products: Product[]): Promise<
     return false;
   }
 }
+
+// Data Converters for Supabase <-> Order Model
+export function transformOrderFromSupabase(item: any): Order {
+  return {
+    id: String(item.id),
+    orderNumber: item.orderNumber ?? item.order_number ?? `GW-${Math.floor(10000 + Math.random() * 90000)}`,
+    date: item.date || new Date().toISOString().split('T')[0],
+    customer: typeof item.customer === 'string' ? JSON.parse(item.customer) : (item.customer || {}),
+    items: Array.isArray(item.items) ? item.items : (typeof item.items === 'string' ? JSON.parse(item.items || '[]') : []),
+    subtotal: typeof item.subtotal === 'number' ? item.subtotal : parseFloat(item.subtotal || '0'),
+    discount: typeof item.discount === 'number' ? item.discount : parseFloat(item.discount || '0'),
+    couponCode: item.couponCode ?? item.coupon_code ?? undefined,
+    shippingFee: typeof (item.shippingFee ?? item.shipping_fee) === 'number' ? (item.shippingFee ?? item.shipping_fee) : parseFloat((item.shippingFee ?? item.shipping_fee) || '0'),
+    total: typeof item.total === 'number' ? item.total : parseFloat(item.total || '0'),
+    status: item.status || 'Pending',
+    paymentStatus: item.paymentStatus ?? item.payment_status ?? 'Paid',
+    trackingNumber: item.trackingNumber ?? item.tracking_number ?? undefined,
+    carrier: item.carrier || 'An Post',
+    paymentMethod: item.paymentMethod ?? item.payment_method ?? 'Card',
+    shippingLabel: typeof item.shippingLabel === 'string' ? JSON.parse(item.shippingLabel) : (item.shippingLabel ?? item.shipping_label ?? undefined),
+    shippedAt: item.shippedAt ?? item.shipped_at ?? undefined,
+    deliveredAt: item.deliveredAt ?? item.delivered_at ?? undefined,
+    notes: item.notes || undefined,
+  };
+}
+
+export function transformOrderToSupabase(order: Order): any {
+  return {
+    id: String(order.id),
+    order_number: order.orderNumber,
+    orderNumber: order.orderNumber,
+    date: order.date,
+    customer: order.customer,
+    items: order.items,
+    subtotal: order.subtotal,
+    discount: order.discount,
+    coupon_code: order.couponCode || null,
+    couponCode: order.couponCode || null,
+    shipping_fee: order.shippingFee,
+    shippingFee: order.shippingFee,
+    total: order.total,
+    status: order.status,
+    payment_status: order.paymentStatus || 'Paid',
+    paymentStatus: order.paymentStatus || 'Paid',
+    tracking_number: order.trackingNumber || null,
+    trackingNumber: order.trackingNumber || null,
+    carrier: order.carrier || 'An Post',
+    payment_method: order.paymentMethod || 'Card',
+    paymentMethod: order.paymentMethod || 'Card',
+    shipping_label: order.shippingLabel || null,
+    shippingLabel: order.shippingLabel || null,
+    shipped_at: order.shippedAt || null,
+    shippedAt: order.shippedAt || null,
+    delivered_at: order.deliveredAt || null,
+    deliveredAt: order.deliveredAt || null,
+    notes: order.notes || null,
+  };
+}
+
+export async function fetchOrdersFromSupabase(): Promise<Order[] | null> {
+  if (!isSupabaseConfigured()) return null;
+  try {
+    const { data, error } = await supabase.from('orders').select('*');
+    if (error) {
+      console.warn('Supabase orders fetch warning:', error.message);
+      return null;
+    }
+    if (data && Array.isArray(data)) {
+      return data.map(transformOrderFromSupabase);
+    }
+  } catch (err: any) {
+    console.warn('Failed to fetch orders from Supabase:', err?.message || err);
+  }
+  return null;
+}
+
+export async function saveOrderToSupabase(order: Order): Promise<{ success: boolean; error?: string }> {
+  if (!isSupabaseConfigured()) {
+    return { success: false, error: 'Supabase credentials are not configured in environment.' };
+  }
+  try {
+    const payload = transformOrderToSupabase(order);
+    const { error } = await supabase.from('orders').upsert(payload);
+    if (!error) {
+      console.log('Successfully saved order to Supabase:', order.id, order.orderNumber);
+      return { success: true };
+    }
+    console.warn('Supabase order upsert error:', error.message);
+    return { success: false, error: error.message };
+  } catch (err: any) {
+    console.error('Failed to save order to Supabase:', err?.message || err);
+    return { success: false, error: err?.message || 'Unknown network error' };
+  }
+}
+
+export async function deleteOrderFromSupabase(id: string): Promise<boolean> {
+  if (!isSupabaseConfigured()) return false;
+  try {
+    const { error } = await supabase.from('orders').delete().eq('id', id);
+    if (error) {
+      console.error('Supabase order delete error:', error.message);
+      return false;
+    }
+    return true;
+  } catch (err) {
+    console.error('Failed to delete order from Supabase:', err);
+    return false;
+  }
+}
+

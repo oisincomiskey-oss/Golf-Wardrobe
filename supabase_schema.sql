@@ -1,5 +1,5 @@
 -- ===================================================
--- SUPABASE RLS & PERMISSION FIX FOR PRODUCTS TABLE
+-- SUPABASE RLS & PERMISSION FIX FOR PRODUCTS & ORDERS
 -- Run this script in your Supabase SQL Editor
 -- ===================================================
 
@@ -36,14 +36,49 @@ CREATE TABLE IF NOT EXISTS public.products (
     created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now())
 );
 
--- 2. Grant schema and table permissions to anon, authenticated, and service_role
+-- 2. Ensure the 'orders' table exists with all required column definitions
+CREATE TABLE IF NOT EXISTS public.orders (
+    id TEXT PRIMARY KEY,
+    order_number TEXT,
+    "orderNumber" TEXT,
+    date TEXT,
+    customer JSONB,
+    items JSONB DEFAULT '[]'::jsonb,
+    subtotal NUMERIC(10, 2) DEFAULT 0.00,
+    discount NUMERIC(10, 2) DEFAULT 0.00,
+    coupon_code TEXT,
+    "couponCode" TEXT,
+    shipping_fee NUMERIC(10, 2) DEFAULT 0.00,
+    "shippingFee" NUMERIC(10, 2) DEFAULT 0.00,
+    total NUMERIC(10, 2) DEFAULT 0.00,
+    status TEXT DEFAULT 'Pending',
+    payment_status TEXT DEFAULT 'Paid',
+    "paymentStatus" TEXT DEFAULT 'Paid',
+    tracking_number TEXT,
+    "trackingNumber" TEXT,
+    carrier TEXT DEFAULT 'An Post',
+    payment_method TEXT DEFAULT 'Card',
+    "paymentMethod" TEXT DEFAULT 'Card',
+    shipping_label JSONB,
+    "shippingLabel" JSONB,
+    shipped_at TEXT,
+    "shippedAt" TEXT,
+    delivered_at TEXT,
+    "deliveredAt" TEXT,
+    notes TEXT,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now())
+);
+
+-- 3. Grant schema and table permissions to anon, authenticated, and service_role
 GRANT USAGE ON SCHEMA public TO anon, authenticated, service_role;
 GRANT ALL ON TABLE public.products TO anon, authenticated, service_role;
+GRANT ALL ON TABLE public.orders TO anon, authenticated, service_role;
 
--- 3. Enable Row Level Security (RLS) on public.products
+-- 4. Enable Row Level Security (RLS) on public.products and public.orders
 ALTER TABLE public.products ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.orders ENABLE ROW LEVEL SECURITY;
 
--- 4. Clean up any existing RLS policies
+-- 5. Clean up any existing RLS policies for products
 DROP POLICY IF EXISTS "Allow public read access" ON public.products;
 DROP POLICY IF EXISTS "Allow public write access" ON public.products;
 DROP POLICY IF EXISTS "Allow anon read" ON public.products;
@@ -56,36 +91,24 @@ DROP POLICY IF EXISTS "Enable insert access for all users" ON public.products;
 DROP POLICY IF EXISTS "Enable update access for all users" ON public.products;
 DROP POLICY IF EXISTS "Enable delete access for all users" ON public.products;
 
--- 5. Create explicit RLS Policies for SELECT, INSERT, UPDATE, DELETE
+-- RLS Policies for products
+CREATE POLICY "Enable read access for all users" ON public.products FOR SELECT TO anon, authenticated, service_role USING (true);
+CREATE POLICY "Enable insert access for all users" ON public.products FOR INSERT TO anon, authenticated, service_role WITH CHECK (true);
+CREATE POLICY "Enable update access for all users" ON public.products FOR UPDATE TO anon, authenticated, service_role USING (true) WITH CHECK (true);
+CREATE POLICY "Enable delete access for all users" ON public.products FOR DELETE TO anon, authenticated, service_role USING (true);
 
--- Policy 1: SELECT (Storefront & Admin can read products)
-CREATE POLICY "Enable read access for all users"
-ON public.products
-FOR SELECT
-TO anon, authenticated, service_role
-USING (true);
+-- 6. Clean up any existing RLS policies for orders
+DROP POLICY IF EXISTS "Enable read access for all users on orders" ON public.orders;
+DROP POLICY IF EXISTS "Enable insert access for all users on orders" ON public.orders;
+DROP POLICY IF EXISTS "Enable update access for all users on orders" ON public.orders;
+DROP POLICY IF EXISTS "Enable delete access for all users on orders" ON public.orders;
 
--- Policy 2: INSERT (Admin can create products)
-CREATE POLICY "Enable insert access for all users"
-ON public.products
-FOR INSERT
-TO anon, authenticated, service_role
-WITH CHECK (true);
+-- RLS Policies for orders (Allows storefront anon users & admin users to create and manage orders)
+CREATE POLICY "Enable read access for all users on orders" ON public.orders FOR SELECT TO anon, authenticated, service_role USING (true);
+CREATE POLICY "Enable insert access for all users on orders" ON public.orders FOR INSERT TO anon, authenticated, service_role WITH CHECK (true);
+CREATE POLICY "Enable update access for all users on orders" ON public.orders FOR UPDATE TO anon, authenticated, service_role USING (true) WITH CHECK (true);
+CREATE POLICY "Enable delete access for all users on orders" ON public.orders FOR DELETE TO anon, authenticated, service_role USING (true);
 
--- Policy 3: UPDATE (Admin can edit products)
-CREATE POLICY "Enable update access for all users"
-ON public.products
-FOR UPDATE
-TO anon, authenticated, service_role
-USING (true)
-WITH CHECK (true);
-
--- Policy 4: DELETE (Admin can delete products)
-CREATE POLICY "Enable delete access for all users"
-ON public.products
-FOR DELETE
-TO anon, authenticated, service_role
-USING (true);
-
--- 6. Enable Supabase Realtime for products table (Optional)
+-- 7. Enable Supabase Realtime for products and orders tables (Optional)
 ALTER PUBLICATION supabase_realtime ADD TABLE public.products;
+ALTER PUBLICATION supabase_realtime ADD TABLE public.orders;
