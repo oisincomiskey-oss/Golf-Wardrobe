@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useStore } from '../context/StoreContext';
 import { Product, ProductCategory, ClubFit, SaleSlide, CustomHeadcoverType, Order, OrderStatus, ShippingSettings } from '../types';
 import { INITIAL_CUSTOM_STUDIO_SETTINGS } from '../data/initialData';
@@ -109,6 +109,7 @@ export const AdminPage: React.FC = () => {
     deleteOrder,
     updateCustomOrderStatus,
     deleteCustomOrder,
+    refreshOrdersFromSupabase,
     updateHomepageConfig,
     updateSalePromoConfig,
     updateStoreSettings,
@@ -154,6 +155,12 @@ export const AdminPage: React.FC = () => {
   };
 
   const [activeTab, setActiveTab] = useState<'products' | 'orders' | 'custom' | 'customStudio' | 'shippingRates' | 'sales' | 'homepage' | 'paypal'>('orders');
+
+  useEffect(() => {
+    if (activeTab === 'orders' && isUnlocked) {
+      refreshOrdersFromSupabase();
+    }
+  }, [activeTab, isUnlocked]);
 
   // Shipping & Orders Management Modal States
   const [selectedOrderForLabel, setSelectedOrderForLabel] = useState<Order | null>(null);
@@ -727,6 +734,16 @@ export const AdminPage: React.FC = () => {
               </div>
 
               <div className="flex items-center gap-3 w-full sm:w-auto shrink-0">
+                <button
+                  type="button"
+                  onClick={async () => {
+                    await refreshOrdersFromSupabase();
+                    triggerToast('Live orders refreshed from Supabase', 'info');
+                  }}
+                  className="bg-[#1A1A1A] hover:bg-[#C9A24D] text-white px-4 py-2.5 rounded-xl text-xs font-bold uppercase tracking-wider flex items-center gap-2 shadow-xs transition-colors cursor-pointer"
+                >
+                  <RefreshCw className="w-4 h-4 text-[#C9A24D]" /> Sync Orders
+                </button>
                 <button
                   type="button"
                   onClick={() => exportOrdersToCSV(orders)}

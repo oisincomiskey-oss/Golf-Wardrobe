@@ -267,34 +267,49 @@ export function transformOrderFromSupabase(item: any): Order {
   };
 }
 
-export function transformOrderToSupabase(order: Order): any {
+export function transformOrderToSupabaseSnakeCase(order: Order): any {
   return {
     id: String(order.id),
     order_number: order.orderNumber,
-    orderNumber: order.orderNumber,
     date: order.date,
     customer: order.customer,
     items: order.items,
     subtotal: order.subtotal,
     discount: order.discount,
     coupon_code: order.couponCode || null,
-    couponCode: order.couponCode || null,
     shipping_fee: order.shippingFee,
-    shippingFee: order.shippingFee,
     total: order.total,
     status: order.status,
     payment_status: order.paymentStatus || 'Paid',
-    paymentStatus: order.paymentStatus || 'Paid',
     tracking_number: order.trackingNumber || null,
-    trackingNumber: order.trackingNumber || null,
     carrier: order.carrier || 'An Post',
     payment_method: order.paymentMethod || 'Card',
-    paymentMethod: order.paymentMethod || 'Card',
     shipping_label: order.shippingLabel || null,
-    shippingLabel: order.shippingLabel || null,
     shipped_at: order.shippedAt || null,
-    shippedAt: order.shippedAt || null,
     delivered_at: order.deliveredAt || null,
+    notes: order.notes || null,
+  };
+}
+
+export function transformOrderToSupabaseCamelCase(order: Order): any {
+  return {
+    id: String(order.id),
+    orderNumber: order.orderNumber,
+    date: order.date,
+    customer: order.customer,
+    items: order.items,
+    subtotal: order.subtotal,
+    discount: order.discount,
+    couponCode: order.couponCode || null,
+    shippingFee: order.shippingFee,
+    total: order.total,
+    status: order.status,
+    paymentStatus: order.paymentStatus || 'Paid',
+    trackingNumber: order.trackingNumber || null,
+    carrier: order.carrier || 'An Post',
+    paymentMethod: order.paymentMethod || 'Card',
+    shippingLabel: order.shippingLabel || null,
+    shippedAt: order.shippedAt || null,
     deliveredAt: order.deliveredAt || null,
     notes: order.notes || null,
   };
@@ -321,15 +336,44 @@ export async function saveOrderToSupabase(order: Order): Promise<{ success: bool
   if (!isSupabaseConfigured()) {
     return { success: false, error: 'Supabase credentials are not configured in environment.' };
   }
+
+  // 1. Try snake_case payload
   try {
-    const payload = transformOrderToSupabase(order);
-    const { error } = await supabase.from('orders').upsert(payload);
-    if (!error) {
-      console.log('Successfully saved order to Supabase:', order.id, order.orderNumber);
+    const snakePayload = transformOrderToSupabaseSnakeCase(order);
+    const { error: snakeErr } = await supabase.from('orders').upsert(snakePayload);
+    if (!snakeErr) {
+      console.log('Successfully saved order to Supabase (snake_case):', order.id, order.orderNumber);
       return { success: true };
     }
-    console.warn('Supabase order upsert error:', error.message);
-    return { success: false, error: error.message };
+
+    if (snakeErr.message && snakeErr.message.toLowerCase().includes('permission denied')) {
+      return {
+        success: false,
+        error: 'Permission denied for table orders (Row Level Security active). Please run the updated SQL script in supabase_schema.sql inside your Supabase SQL Editor to grant RLS policies.'
+      };
+    }
+    console.warn('Order snake_case upsert failed, trying camelCase payload fallback:', snakeErr.message);
+  } catch (e: any) {
+    console.warn('Snake case order upsert network error:', e?.message || e);
+  }
+
+  // 2. Try camelCase payload
+  try {
+    const camelPayload = transformOrderToSupabaseCamelCase(order);
+    const { error: camelErr } = await supabase.from('orders').upsert(camelPayload);
+    if (!camelErr) {
+      console.log('Successfully saved order to Supabase (camelCase):', order.id, order.orderNumber);
+      return { success: true };
+    }
+
+    if (camelErr.message && camelErr.message.toLowerCase().includes('permission denied')) {
+      return {
+        success: false,
+        error: 'Permission denied for table orders (Row Level Security active). Please run the updated SQL script in supabase_schema.sql inside your Supabase SQL Editor to grant RLS policies.'
+      };
+    }
+    console.warn('Camel case order upsert failed:', camelErr.message);
+    return { success: false, error: camelErr.message };
   } catch (err: any) {
     console.error('Failed to save order to Supabase:', err?.message || err);
     return { success: false, error: err?.message || 'Unknown network error' };

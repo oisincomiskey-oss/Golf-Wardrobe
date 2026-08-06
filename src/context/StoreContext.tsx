@@ -94,6 +94,7 @@ interface StoreContextType {
   updateCustomOrderStatus: (customId: string, status: CustomHeadcoverConfig['status']) => void;
   deleteCustomOrder: (customId: string) => void;
   placeOrder: (customer: CustomerDetails, paymentMethod: string, shippingFeeOverride?: number) => Order;
+  refreshOrdersFromSupabase: () => Promise<void>;
   updateHomepageConfig: (updates: Partial<HomepageConfig>) => void;
   updateSalePromoConfig: (updates: Partial<SalePromoConfig>) => void;
   updateAISettings: (updates: Partial<AISettingsConfig>) => void;
@@ -144,7 +145,15 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     try {
       localStorage.setItem(`golf_wardrobe_${key}`, JSON.stringify(value));
     } catch (e) {
-      console.warn(`Failed to save ${key} to localStorage (quota may be exceeded), relying on IndexedDB persistence.`, e);
+      // Clear bulky items like products from localStorage if quota exceeded, then retry
+      try {
+        if (key !== 'products') {
+          localStorage.removeItem('golf_wardrobe_products');
+          localStorage.setItem(`golf_wardrobe_${key}`, JSON.stringify(value));
+        }
+      } catch (retryErr) {
+        // Quietly rely on IndexedDB + Supabase without spamming warnings
+      }
     }
     idbSet(key, value);
     broadcastChange(key, value);
@@ -887,6 +896,48 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     return newOrder;
   };
 
+  const refreshOrdersFromSupabase = async () => {
+    if (!isSupabaseConfigured()) return;
+    try {
+      const remoteOrders = await fetchOrdersFromSupabase();
+      if (remoteOrders && Array.isArray(remoteOrders)) {
+        setOrders((prev) => {
+          const combinedMap = new Map<string, Order>();
+          prev.forEach((o) => combinedMap.set(o.id, o));
+          remoteOrders.forEach((o) => combinedMap.set(o.id, o));
+          const merged = Array.from(combinedMap.values());
+          setStored('orders', merged);
+          return merged;
+        });
+      }
+    } catch (e) {
+      console.warn('Failed to refresh orders from Supabase:', e);
+    }
+  };
+
+  // Background polling for live orders when Supabase is configured
+  useEffect(() => {
+    if (!isSupabaseConfigured()) return;
+    const interval = setInterval(() => {
+      fetchOrdersFromSupabase().then((remoteOrders) => {
+        if (remoteOrders && Array.isArray(remoteOrders) && remoteOrders.length > 0) {
+          setOrders((prev) => {
+            const combinedMap = new Map<string, Order>();
+            prev.forEach((o) => combinedMap.set(o.id, o));
+            remoteOrders.forEach((o) => combinedMap.set(o.id, o));
+            const merged = Array.from(combinedMap.values());
+            if (merged.length !== prev.length) {
+              setStored('orders', merged);
+              return merged;
+            }
+            return prev;
+          });
+        }
+      }).catch(() => {});
+    }, 10000);
+    return () => clearInterval(interval);
+  }, []);
+
   // Config Actions
   const updateHomepageConfig = (updates: Partial<HomepageConfig>) => {
     setHomepageConfig((prev) => {
@@ -1019,6 +1070,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         updateCustomOrderStatus,
         deleteCustomOrder,
         placeOrder,
+        refreshOrdersFromSupabase,
         updateHomepageConfig,
         updateSalePromoConfig,
         updateAISettings,
