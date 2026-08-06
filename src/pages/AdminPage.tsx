@@ -696,10 +696,9 @@ export const AdminPage: React.FC = () => {
                           <Edit className="w-4 h-4" />
                         </button>
                         <button
-                          onClick={() => {
+                          onClick={async () => {
                             if (confirm(`Delete ${p.name}?`)) {
-                              deleteProduct(p.id);
-                              triggerToast('Product deleted.', 'info');
+                              await deleteProduct(p.id);
                             }
                           }}
                           className="p-2 text-gray-400 hover:text-red-500 rounded-lg hover:bg-red-50"

@@ -158,11 +158,6 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     idbSet(key, value);
     broadcastChange(key, value);
 
-    // Sync store updates to Supabase
-    if (key === 'products' && Array.isArray(value)) {
-      batchSaveProductsToSupabase(value).catch((err) => console.warn('Failed to batch save products to Supabase:', err));
-    }
-
     // Sync store updates to backend server API so all new visitors see updated products, prices, and customizations
     const syncKeys = ['products', 'categories', 'storeSettings', 'customStudioSettings', 'homepage', 'salePromoConfig', 'aiSettings'];
     if (syncKeys.includes(key)) {
@@ -251,7 +246,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         }
 
         // Products: Supabase takes highest priority, then Server API / Static files, then IndexedDB
-        const loadedProducts: Product[] | null = (supabaseProducts && Array.isArray(supabaseProducts))
+        const loadedProducts: Product[] | null = (supabaseProducts !== null && Array.isArray(supabaseProducts))
           ? supabaseProducts
           : (serverData?.products && Array.isArray(serverData.products) && serverData.products.length > 0)
           ? serverData.products
@@ -259,7 +254,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
           ? staticProducts
           : await idbGet<Product[]>('products');
 
-        if (loadedProducts && Array.isArray(loadedProducts) && loadedProducts.length > 0 && isMounted) {
+        if (loadedProducts && Array.isArray(loadedProducts) && isMounted) {
           setProducts(loadedProducts);
           try {
             localStorage.setItem('golf_wardrobe_products', JSON.stringify(loadedProducts));
@@ -649,18 +644,25 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     }
   };
 
-  const deleteProduct = (id: string) => {
-    deleteProductFromSupabase(id).then((success) => {
+  const deleteProduct = async (id: string) => {
+    const targetProduct = products.find((p) => p.id === id);
+    const prodName = targetProduct?.name || 'Product';
+
+    if (isSupabaseConfigured()) {
+      const success = await deleteProductFromSupabase(id);
       if (!success) {
         console.warn('Failed to delete product from Supabase:', id);
+        triggerToast(`Failed to delete "${prodName}" from database`, 'error');
+        return;
       }
-    });
+    }
+
     setProducts((prev) => {
       const next = prev.filter((p) => p.id !== id);
       setStored('products', next);
       return next;
     });
-    triggerToast('Product deleted', 'info');
+    triggerToast(`Product "${prodName}" deleted`, 'info');
   };
 
   // Category Actions
