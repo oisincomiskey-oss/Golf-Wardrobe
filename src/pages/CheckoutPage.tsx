@@ -4,35 +4,37 @@ import { calculateShippingFee, calculateHeadcoverDiscount } from '../utils/shipp
 import { CustomerDetails, Order } from '../types';
 import { 
   ShieldCheck, Lock, CreditCard, Truck, Check, ArrowRight, 
-  ShoppingBag, CheckCircle2, ChevronRight, Download, Package 
+  ShoppingBag, CheckCircle2, ChevronRight, Download, Package, AlertCircle 
 } from 'lucide-react';
+import { PayPalScriptProvider, PayPalButtons } from '@paypal/react-paypal-js';
 
 export const CheckoutPage: React.FC = () => {
-  const { cart, appliedCoupon, couponDiscountPercent, storeSettings, placeOrder, navigateTo } = useStore();
+  const { cart, appliedCoupon, couponDiscountPercent, storeSettings, placeOrder, navigateTo, triggerToast } = useStore();
 
   const [step, setStep] = useState<'details' | 'shipping' | 'payment' | 'confirmation'>('details');
   const [completedOrder, setCompletedOrder] = useState<Order | null>(null);
+  const [paypalError, setPaypalError] = useState<string | null>(null);
 
   // Form State
   const [customerForm, setCustomerForm] = useState<CustomerDetails>({
-    email: 'charles.s@example.com',
-    firstName: 'Charles',
-    lastName: 'Sterling',
-    address: '14 Grafton Street',
-    apartment: 'Flat 2B',
-    city: 'Dublin',
-    postcode: 'D02 X285',
+    email: '',
+    firstName: '',
+    lastName: '',
+    address: '',
+    apartment: '',
+    city: '',
+    postcode: '',
     country: 'Ireland',
-    phone: '+353 87 123 4567'
+    phone: ''
   });
 
   const [shippingMethod, setShippingMethod] = useState<'standard' | 'express'>('standard');
   const [paymentMethod, setPaymentMethod] = useState<'card' | 'applepay' | 'paypal'>('card');
 
-  // Card details mock
-  const [cardNumber, setCardNumber] = useState('4242 •••• •••• 4242');
-  const [cardExpiry, setCardExpiry] = useState('08/28');
-  const [cardCvc, setCardCvc] = useState('888');
+  // Card details
+  const [cardNumber, setCardNumber] = useState('');
+  const [cardExpiry, setCardExpiry] = useState('');
+  const [cardCvc, setCardCvc] = useState('');
 
   const subtotal = cart.reduce((sum, item) => sum + item.product.price * item.quantity, 0);
   const headcoverDiscountAmount = calculateHeadcoverDiscount(cart);
@@ -450,6 +452,7 @@ export const CheckoutPage: React.FC = () => {
                     <input
                       type="text"
                       required
+                      placeholder="4532 •••• •••• 1234"
                       value={cardNumber}
                       onChange={(e) => setCardNumber(e.target.value)}
                       className="w-full bg-white border border-[#E5DEC9] rounded-xl px-3.5 py-2.5 font-mono"
@@ -462,6 +465,7 @@ export const CheckoutPage: React.FC = () => {
                       <input
                         type="text"
                         required
+                        placeholder="MM/YY"
                         value={cardExpiry}
                         onChange={(e) => setCardExpiry(e.target.value)}
                         className="w-full bg-white border border-[#E5DEC9] rounded-xl px-3.5 py-2.5 font-mono"
@@ -472,6 +476,7 @@ export const CheckoutPage: React.FC = () => {
                       <input
                         type="password"
                         required
+                        placeholder="123"
                         value={cardCvc}
                         onChange={(e) => setCardCvc(e.target.value)}
                         className="w-full bg-white border border-[#E5DEC9] rounded-xl px-3.5 py-2.5 font-mono"
@@ -481,33 +486,102 @@ export const CheckoutPage: React.FC = () => {
                 </div>
               )}
 
-              {/* PayPal Form Container */}
-              {paymentMethod === 'paypal' && (
-                <div className="p-4 bg-gradient-to-r from-blue-50/80 to-amber-50/50 rounded-2xl border border-blue-200 space-y-3 text-xs">
-                  <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 rounded-full bg-blue-600 text-white font-bold italic flex items-center justify-center text-sm shadow-xs shrink-0">
-                      P
-                    </div>
-                    <div>
-                      <p className="font-bold text-gray-900">PayPal Express Checkout</p>
-                      <p className="text-[11px] text-gray-600">Pay securely with your PayPal account or Pay in 3 installments</p>
-                    </div>
-                  </div>
-                  <div className="bg-white p-3 rounded-xl border border-blue-100 text-[11px] text-gray-600 space-y-1">
-                    <p className="font-semibold text-blue-900 flex items-center gap-1">
-                      <Check className="w-3.5 h-3.5 text-blue-600" /> Merchant Account: {storeSettings.paypalEmail || 'payments@thegolfwardrobe.com'}
-                    </p>
-                    <p className="text-[10px] text-gray-500">Includes PayPal Buyer Protection & instant digital order confirmation</p>
-                  </div>
-                </div>
-              )}
+              {/* PayPal Form Container & Smart Buttons */}
+              {paymentMethod === 'paypal' && (() => {
+                const configuredClientId = storeSettings.paypalClientId?.trim();
+                const activeClientId = (configuredClientId && configuredClientId !== 'sb-client-id-golfwardrobe-live')
+                  ? configuredClientId
+                  : 'test';
 
-              <button
-                type="submit"
-                className="w-full bg-[#C9A24D] hover:bg-[#b38e3c] text-white py-4 rounded-2xl text-xs font-bold uppercase tracking-widest transition-all shadow-xl flex items-center justify-center gap-2"
-              >
-                <Lock className="w-4 h-4" /> Place Order • {storeSettings.currencySymbol}{grandTotal.toFixed(2)}
-              </button>
+                return (
+                  <div className="space-y-4">
+                    <div className="p-4 bg-gradient-to-r from-blue-50/80 to-amber-50/50 rounded-2xl border border-blue-200 space-y-3 text-xs">
+                      <div className="flex items-center gap-3">
+                        <div className="w-8 h-8 rounded-full bg-blue-600 text-white font-bold italic flex items-center justify-center text-sm shadow-xs shrink-0">
+                          P
+                        </div>
+                        <div>
+                          <p className="font-bold text-gray-900">Official PayPal Express Checkout</p>
+                          <p className="text-[11px] text-gray-600">Pay securely with your PayPal account or Pay in 3 installments</p>
+                        </div>
+                      </div>
+                      <div className="bg-white p-3 rounded-xl border border-blue-100 text-[11px] text-gray-600 space-y-1">
+                        <p className="font-semibold text-blue-900 flex items-center gap-1">
+                          <Check className="w-3.5 h-3.5 text-blue-600" /> Merchant Account: {storeSettings.paypalEmail || 'payments@thegolfwardrobe.com'}
+                        </p>
+                        <p className="text-[10px] text-gray-500">EUR Currency • PayPal Buyer Protection & instant digital order confirmation</p>
+                      </div>
+                    </div>
+
+                    {paypalError && (
+                      <div className="p-3 bg-red-50 border border-red-200 rounded-xl text-xs text-red-700 flex items-center gap-2">
+                        <AlertCircle className="w-4 h-4 shrink-0" />
+                        <span>{paypalError}</span>
+                      </div>
+                    )}
+
+                    <div className="pt-2">
+                      <PayPalScriptProvider options={{ clientId: activeClientId, currency: 'EUR', intent: 'capture' }}>
+                        <PayPalButtons
+                          style={{ layout: 'vertical', color: 'gold', shape: 'rect', label: 'paypal' }}
+                          createOrder={(_data, actions) => {
+                            setPaypalError(null);
+                            return actions.order.create({
+                              intent: 'CAPTURE',
+                              purchase_units: [
+                                {
+                                  amount: {
+                                    currency_code: 'EUR',
+                                    value: grandTotal.toFixed(2),
+                                  },
+                                  description: `The Golf Wardrobe Order (${cart.length} items)`,
+                                },
+                              ],
+                            });
+                          }}
+                          onApprove={async (data, actions) => {
+                            setPaypalError(null);
+                            try {
+                              if (actions.order) {
+                                const details = await actions.order.capture();
+                                console.log('PayPal payment captured successfully:', details);
+                                const orderObj = placeOrder(
+                                  customerForm,
+                                  `PayPal (Ref: ${details.id || data.orderID})`,
+                                  shippingFee
+                                );
+                                setCompletedOrder(orderObj);
+                                setStep('confirmation');
+                                triggerToast('PayPal payment successful! Order confirmed.', 'success');
+                              }
+                            } catch (err: any) {
+                              console.error('PayPal Order Capture Error:', err);
+                              setPaypalError('Failed to complete PayPal payment capture. Please try again.');
+                            }
+                          }}
+                          onCancel={() => {
+                            console.log('User cancelled PayPal checkout.');
+                            triggerToast('PayPal payment was cancelled', 'info');
+                          }}
+                          onError={(err: any) => {
+                            console.error('PayPal SDK Error:', err);
+                            setPaypalError('PayPal payment failed or was declined. Please try again or choose another payment method.');
+                          }}
+                        />
+                      </PayPalScriptProvider>
+                    </div>
+                  </div>
+                );
+              })()}
+
+              {paymentMethod !== 'paypal' && (
+                <button
+                  type="submit"
+                  className="w-full bg-[#C9A24D] hover:bg-[#b38e3c] text-white py-4 rounded-2xl text-xs font-bold uppercase tracking-widest transition-all shadow-xl flex items-center justify-center gap-2"
+                >
+                  <Lock className="w-4 h-4" /> Place Order • {storeSettings.currencySymbol}{grandTotal.toFixed(2)}
+                </button>
+              )}
 
               <p className="text-[11px] text-center text-gray-500 flex items-center justify-center gap-1">
                 <ShieldCheck className="w-3.5 h-3.5 text-[#C9A24D]" /> 256-Bit Encrypted Payment Lock
